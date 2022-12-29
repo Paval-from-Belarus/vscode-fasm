@@ -1,17 +1,28 @@
-
 const vscode = require('vscode');
 const LANG_NAME = 'fasm-x86_64';
 const CONFIG_HEADER = 'fasm';
 
 let CompillerPath;
+let WorkDirectoryPath;
 const INDEX_FILE_CNT = 300;
 const MAX_FUNC_MODULE_CNT = 100;
 const SEARCH_EXT = ['.fasm', '.asm', '.inc'];
 const IGNORE_FILES = [];
 const DUMYY_MODULE_NAME = "@@Dummy_Module@@";
 
+const saveSourceFile = (fullName) => {
+	let iSelf = WorkDirectoryPath.length;
+	let fileName = fullName.substring(iSelf + 1, fullName.length);
+	arrFiles.push(fileName);
+	lastFileIndex++;
+}	
+const getLastSourceIndex = () => lastFileIndex;
 const getHashCode = (moduleName) => {
-	return (hash(moduleName) / 2 + hash(moduleName) << 2) % MAX_FUNC_MODULE_CNT;
+	let sum = 0;
+	let factor = 13;
+	for(let i = 0; i < moduleName.length; i++)
+		sum += moduleName.charCodeAt(i) * factor;
+	return sum % MAX_FUNC_MODULE_CNT;
 }
 const getFuncInfo = (funcName) => {
 	let hasModule = (funcName.indexOf('.') > - 1);
@@ -23,7 +34,9 @@ const getFuncInfo = (funcName) => {
 		moduleName = arrString[0];
 	}
 	funcInfo.hashKey = getHashCode(moduleName);
-	funcInfo.funcName = funcName;
+	let nameLength = funcName.charAt(funcName.length - 1) == ':' ? funcName.length - 1 : funcName.length;
+	funcInfo.funcName =  funcName.substring(0, nameLength);
+	funcInfo.sourceId = getLastSourceIndex();
 	return funcInfo;
 }
 class FuncModule {
@@ -42,12 +55,14 @@ class FuncInfo {
 	funcName;
 	funcInfo;
 	hasModule;
+	sourceId;
 }
 const hashTable = new Array(MAX_FUNC_MODULE_CNT);
-
+const arrFiles = new Array(INDEX_FILE_CNT);
+let lastFileIndex = -1;
 const addToTable = (funcInfo) => {
 	let moduleHead = hashTable.at(funcInfo.hashKey);
-	let moduleName = funcInfo.hasModule ? funcInfo.split('.', 2)[0] : DUMYY_MODULE_NAME;
+	let moduleName = funcInfo.hasModule ? funcInfo.funcName.split('.', 2)[0] : DUMYY_MODULE_NAME;
 	if(moduleHead == null){
 		moduleHead = new FuncModule();
 		hashTable[funcInfo.hashKey] = moduleHead;
@@ -74,23 +89,37 @@ class GoWorkspaceSymbolProvider  {
     }
 }
 
-const STR_DOCS_START = 'Input:';
+const STR_DOCS_START = ';Input:';
 const STR_DOCS_END	 = ';\n';
-const getDocsBlock = (buffString, offset) => {
-	let iStart = buffString.indexOf(STR_DOCS_START, offset);
-	if(iStart == -1)
+const getDocsBlock = (fHandle, nLine, limitLine) => {
+	let startLine = nLine;
+	let buffString = fHandle.lineAt(nLine++).text;
+	if(buffString.indexOf(STR_DOCS_START) != 0)
 		return null;
-	let iEnd = buffString.indexOf(STR_DOCS_END, iStart);
-	if(iEnd == -1)
-		return null;
-	return buffString.substring(iStart, iEnd);
+
+	while( (nLine < limitLine) && fHandle.lineAt(nLine).text.indexOf(';') != -1)
+		nLine++;
+	buffString = fHandle.getText(
+		new vscode.Range(
+			new vscode.Position(startLine, 0),
+			new vscode.Position(nLine - 1, 1) 
+		)
+	)
+	return {
+		block: buffString,
+		nextLine: nLine
+	}		
 }
-const getFirstName = (buffString, offset) => {
-	let iStart = offset; //the start of name
-	let iEnd = iStart + 1;
-	while(iEnd < (buffString.length + offset) && buffString.charAt(iEnd) != ' ' && buffString.charAt(iEnd) != '\n')
-		iEnd++;
-	return buffString.substring(iStart, iEnd - 1);
+const excludeKeyword = 'proc';
+const getFirstName = (fHandle, nLine) => {
+	let buffString = fHandle.lineAt(nLine).text;
+	let arrString = buffString.split(' ', 3);
+	let funcName;
+	if(arrString[0] == excludeKeyword)
+		funcName = arrString[1];
+	else
+		funcName = arrString[0];
+	return funcName;
 }
 const DEFAULT_LINE_CNT = 20; //num of charachters
 //if error return -1
@@ -98,7 +127,7 @@ const DEFAULT_LINE_CNT = 20; //num of charachters
 const addToIndex = (fHandle) => {
 	let buffString;
 	let restRange;
-	let currLine;
+	let currLine = 0;
 	let rangeChanged;
 	let range = new vscode.Range(
 		new vscode.Position(0, 0),
@@ -107,20 +136,23 @@ const addToIndex = (fHandle) => {
 	do {
 		restRange = fHandle.validateRange(range);
 		rangeChanged = (restRange != range);
-			buffString = fHandle.getText(range);
-			while(currLine < restRange.end().line()){
-				let buffDocs = getDocsBlock(buffString, currLine);
-				if(buffDocs == null || buffString.length < currLine + buffDocs.length + 1)
+			while(currLine < restRange.end.line){
+				let buffDocs = null;
+				while(buffDocs == null && currLine < restRange.end.line){
+					buffDocs = getDocsBlock(fHandle, currLine, restRange.end.line);
+					currLine++;
+				}	
+				if(buffDocs == null || restRange.end.line < buffDocs.nextLine)
 					break;
-				let funcName = getFirstName(buffString, currLine + buffDocs.length)
-				currLine += funcName.length + buffDocs.length + 1;
+				currLine = buffDocs.nextLine;
+				let funcName = getFirstName(fHandle, currLine++);
 				let funcInfo = getFuncInfo(funcName);
-				funcInfo.funcInfo = buffDocs;
+				funcInfo.funcInfo = buffDocs.block;
 				addToTable(funcInfo);
 			}
 		range = new vscode.Range(
-			new vscode.Position(range.start().line() + DEFAULT_LINE_CNT, 0),
-			new vscode.Position(range.end().line() + DEFAULT_LINE_CNT, 0),	
+			new vscode.Position(range.start.line + DEFAULT_LINE_CNT, 0),
+			new vscode.Position(range.end.line + DEFAULT_LINE_CNT, 0),	
 		);
 	}while(!rangeChanged);
 
@@ -136,7 +168,10 @@ const initIndex = () => {
 		}
 		arrFiles.forEach((fileUri) => {
 			fHandle = vscode.workspace.openTextDocument(fileUri);
-			fHandle.then((file) => addToIndex(file))
+			fHandle.then((file) => {
+				saveSourceFile(file.fileName);
+				addToIndex(file);
+			})
 
 		});
 	}
