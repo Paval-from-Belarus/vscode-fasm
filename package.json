@@ -2,32 +2,32 @@
 	"name": "vscode-fasm",
 	"displayName": "Fasm highlight",
 	"description": "Fasm x86_64 assembly syntax highlighting",
-	"version": "0.0.3",
-	"publisher": "amatilda",
+	"version": "0.0.1",
+	"publisher": "m_rgan",
 	"preview": true,
 	"engines": {
 		"vscode": "^1.43.0"
 	},
 	"license": "MIT License",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/amatilda/vscode-fasm.git"
-	},
-	"bugs": {
-		"url": "https://github.com/amatilda/vscode-fasm/issues",
-		"email": "hapr-lera@mail.ru"
-	},
-	"homepage": "https://github.com/amatilda/vscode-fasm/blob/main/README.md",
 	"categories": [
 		"Programming Languages"
 	],
 	"author": {
-		"name": "Pavel Kulaga"
+		"name": "Pavel-from-Belarus"
 	},
+	"activationEvents": [
+		"onLanguage:fasm-x86_64"
+	],
 	"contributes": {
+		"commands":[
+			{
+				"command": "extension.sayHello",
+				"title":"Hello World"
+			}
+		],
 		"languages": [
 			{
-				"id": "fasm-intel-x86_64",
+				"id": "fasm-x86_64",
 				"aliases": [
 					"fasm",
 					"asm",
@@ -43,9 +43,9 @@
 		],
 		"grammars": [
 			{
-				"language": "fasm-intel-x86_64",
-				"scopeName": "source.x86_64",
-				"path": "./syntaxes/fasm_x86_64.tmLanguage.json"
+				"language": "fasm-x86_64",
+				"scopeName": "source.asm_x86_64.fasm",
+				"path": "./syntaxes/fasm-x86_64.tmLanguage.json"
 			}
 		]
 	}

@@ -1,6 +1,6 @@
 {
 	"name": "Fasm",
-	"scopeName": "source.x86_64",
+	"scopeName": "source.asm_x86_64.fasm",
 	"fileTypes": ["fasm", "asm", "inc"],
 	"patterns": [
 	{
@@ -33,9 +33,36 @@
 		{
 			"patterns":[
 				{
-					"name": "string.unquoted.func-docs",
 					"begin":";Input:(\\w*)",
-					"end": "$[^;]"
+					"end": ";\n",
+					"beginCaptures": [{
+						"name": "markup.other.docs"
+					}],
+					"endCaptures": [{
+						"name": "markup.other.docs"
+					}],
+					"patterns":[
+						{
+							"match": "Input:",
+							"name": "markup.other.docs"
+						},
+						{
+							"match": "Output:",
+							"name": "markup.other.docs"
+						},
+						{
+							"match": "Notes:",
+							"name": "markup.other.docs"
+						},
+						{
+							"match": "Assume:",
+							"name": "markup.other.docs"
+						},
+						{
+							"match": ".",
+							"name": "comment.block.func-docs"
+						}
+					]
 				},
 
 				{
@@ -83,32 +110,12 @@
 			"patterns": [
 			{
 				"match": "(')(.*)(')",
-				"captures":
-				{
-					"0":
-					{
-						"name": "keyword.control"
-					},
-					"2":
-					{
-						"name": "string.quoted.double.c"
-					}
-				},
+				"name": "string.quoted.double.c",
 				"comment": "Quoted single"
 			},
 			{
 				"match": "(\")(.*)(\")",
-				"captures":
-				{
-					"0":
-					{
-						"name": "keyword.control"
-					},
-					"2":
-					{
-						"name": "string.quoted.double.c"
-					}
-				},
+				"name": "string.quoted.double.c",
 				"comment": "Quoted double"
 			}]
 		},
@@ -278,7 +285,7 @@
 							"name": "constant.numeric.hexadecimal.cstyle"
 						},
 						{
-							"match": "(0[a-fA-F]|[1-9])[0-9a-fA-F]*+(h|H)",
+							"match": "(0[a-fA-F]|[0-9])[0-9a-fA-F]*+(h|H)",
 							"name": "constant.numeric.hexadecimal.asmstyle"
 						}
 						
@@ -303,15 +310,15 @@
 			"patterns":[
 				{
 					"name": "keyword.control",
-					"match": "(\\[|\\]|,|:|\\+|-|\\*|/)",
+					"match": "(\\[|\\]|,|:|\\+|-|\\*|/)|\\.|=",
 					"comment": "Simbols"
 				},
 				{
-					"match": "macro|repeat|if|end if|end repeat|include|format|org|entry|struct|@@",
+					"match": "macro|repeat|if|end if|end repeat|include|format|org|entry|struct|@@|\\(|\\)",
 					"name": "keyword.control.compiller"
 				},
 				{
-					"match": "rept|repv|reps|define|equ|fix|match|local",
+					"match": "rept|repv|reps|define|equ|fix|match|local|{|}|\\\\|([a-zA-Z]+(\\&|\\*))",
 					"name": "keyword.control.preproc"
 					
 				},
@@ -334,11 +341,11 @@
 			"patterns":[
 				{
 					"name": "variable.other.hungarian",
-					"match": "(b|w|d|q|p|lp|s|sz)[_a-zA-Z0-9]+",
+					"match": "(b|w|d|q|p|lp|s|sz|arr|bmp|bm)[A-Z][a-zA-Z0-9]*",
 					"comment": "variable in hungrian-system style"
 				},
 				{
-					"match": "[@_a-zA-Z]+",
+					"match": "[_@a-zA-Z][_@a-zA-Z]*",
 					"name": "entity.other.text.default"
 				}
 			]
