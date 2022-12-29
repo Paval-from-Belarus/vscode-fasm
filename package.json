@@ -26,6 +26,16 @@
 				"title": "FASM: init index"
 			}
 		],
+		"configuration":{
+			"title": "FASM",
+			"properties": {
+				"fasm.compiller":{
+					"type": "string",
+					"default": false,
+					"description": "flat assemler compiller"
+				}
+			}
+		},
 		"languages": [
 			{
 				"id": "fasm-x86_64",
