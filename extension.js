@@ -39,16 +39,30 @@ const getFuncInfo = (funcName) => {
 	funcInfo.sourceId = getLastSourceIndex();
 	return funcInfo;
 }
+
+//Automatically parse input string onto sequence
+class FuncInfo {
+	strInput;
+	strOutput;
+	strNotes;
+	FuncInfo(strInfo){
+		
+	}
+}
 class FuncModule {
 	arrFunc;
 	selfName;
 	nextModule; //linked list of FuncModule
+	contains = (funcName) => {
+		let bResult = false;
+		for(let iFunc = 0; iFunc < this.arrFunc.length; iFunc++){
+			bResult = this.arrFunc.at(iFunc).funcName == funcName;
+			if(bResult)
+				break;
+		}
+		return bResult;
+	}
 
-}
-const getFuncModule = (selfHash) => {
-	let head = new FuncModule();
-	head.selfHash = selfHash;
-	return  head;
 }
 class FuncInfo {
 	hashKey;
@@ -59,10 +73,34 @@ class FuncInfo {
 }
 const hashTable = new Array(MAX_FUNC_MODULE_CNT);
 const arrFiles = new Array(INDEX_FILE_CNT);
+
+//return null if module is not exists
+const getModuleHead = (moduleName) => {
+	let iTable = getHashCode(moduleName);
+	let moduleHead = hashTable.at(iTable);
+	if(moduleHead != null){
+		while(moduleHead.nextModule != null && moduleHead.selfName != moduleName){
+			moduleHead = moduleHead.nextModule;
+		}
+		if(moduleHead.selfName == moduleName)
+			return moduleHead;
+	}
+	return null;
+}
+
+
 let lastFileIndex = -1;
 const addToTable = (funcInfo) => {
 	let moduleHead = hashTable.at(funcInfo.hashKey);
-	let moduleName = funcInfo.hasModule ? funcInfo.funcName.split('.', 2)[0] : DUMYY_MODULE_NAME;
+	let moduleName;
+	if(funcInfo.hasModule){
+		let strBuffer = funcInfo.funcName.split('.', 2);
+		moduleName = strBuffer[0];
+		funcInfo.funcName = strBuffer[1];
+	}
+	else {
+		moduleName = DUMYY_MODULE_NAME;
+	}
 	if(moduleHead == null){
 		moduleHead = new FuncModule();
 		hashTable[funcInfo.hashKey] = moduleHead;
@@ -80,7 +118,13 @@ const addToTable = (funcInfo) => {
 	if(moduleHead.arrFunc == null){
 		moduleHead.arrFunc = new Array();
 	}
-	moduleHead.arrFunc.push(funcInfo);
+	if(!moduleHead.contains(funcInfo.funcName))
+		moduleHead.arrFunc.push(funcInfo);
+	else 
+		{
+			let x = 10;
+			x += 12;
+		}
 
 }
 class GoWorkspaceSymbolProvider  {
@@ -89,8 +133,78 @@ class GoWorkspaceSymbolProvider  {
     }
 }
 
+const convertFuncInfo = () => {
+
+}
+//funcName is part of whole name
+//insert part name 
+getCompletionItems = (moduleName, funcName) => {
+	let moduleHead = getModuleHead(moduleName);
+	let arrItems = new Array();
+	if(moduleHead == null)
+		return null;
+	moduleHead.arrFunc.forEach( (funcInfo) => {
+		if(funcInfo.funcName.includes(funcName) ) { //skip module name
+				arrItems.push(
+					new vscode.CompletionItem(funcInfo.funcName, vscode.CompletionItemKind.Function)
+				);
+		}
+	})
+	return arrItems;
+}
+class HoverProvider {
+	provideHover(document, position, token){
+
+		return {
+			contents: ['Hover content']
+		};
+	}
+}
+class CompletionItemProvider {
+
+	arrString;
+	extract = (document, cursorPos) => {
+		let strBuffer = document.lineAt(cursorPos.line).text;
+		let iEnd = cursorPos.character - 1;
+		let iStart = iEnd;
+		while(iStart > 0 && strBuffer.charAt(iStart - 1) != ' ')
+			iStart--;
+
+		this.arrString = strBuffer.substring(iStart, iEnd + 1).split('.', 2);
+	}
+	//it can be only part of real module name
+	extractModule = () => {
+		let moduleName;
+		if(this.arrString.length == 1 || this.arrString[0].length == 0)
+			moduleName == null;
+		else
+			moduleName = this.arrString[0];
+								//it's not module because module always starts with 
+								//upperCase letter
+		return moduleName;
+	}
+	extractLabel = () => {
+		let lblName;
+		if(this.arrString.length == 1){
+			lblName = this.arrString[0];
+		}
+		else {
+			lblName = this.arrString[1];
+		}
+		return lblName;
+	}
+    provideCompletionItems(
+        document, position, token){
+			this.extract(document, position);
+			let moduleName = this.extractModule();
+			if(moduleName == null)
+				moduleName = DUMYY_MODULE_NAME;
+			let funcName = this.extractLabel();
+			let arrItems = getCompletionItems(moduleName, funcName);
+			return arrItems;
+    }
+}
 const STR_DOCS_START = ';Input:';
-const STR_DOCS_END	 = ';\n';
 const getDocsBlock = (fHandle, nLine, limitLine) => {
 	let startLine = nLine;
 	let buffString = fHandle.lineAt(nLine++).text;
@@ -121,40 +235,30 @@ const getFirstName = (fHandle, nLine) => {
 		funcName = arrString[0];
 	return funcName;
 }
-const DEFAULT_LINE_CNT = 20; //num of charachters
+
 //if error return -1
 //else return 0;
 const addToIndex = (fHandle) => {
-	let buffString;
-	let restRange;
 	let currLine = 0;
-	let rangeChanged;
-	let range = new vscode.Range(
-		new vscode.Position(0, 0),
-		new vscode.Position(DEFAULT_LINE_CNT, 0)
-	)
-	do {
-		restRange = fHandle.validateRange(range);
-		rangeChanged = (restRange != range);
-			while(currLine < restRange.end.line){
-				let buffDocs = null;
-				while(buffDocs == null && currLine < restRange.end.line){
-					buffDocs = getDocsBlock(fHandle, currLine, restRange.end.line);
-					currLine++;
-				}	
-				if(buffDocs == null || restRange.end.line < buffDocs.nextLine)
-					break;
-				currLine = buffDocs.nextLine;
-				let funcName = getFirstName(fHandle, currLine++);
-				let funcInfo = getFuncInfo(funcName);
-				funcInfo.funcInfo = buffDocs.block;
-				addToTable(funcInfo);
-			}
-		range = new vscode.Range(
-			new vscode.Position(range.start.line + DEFAULT_LINE_CNT, 0),
-			new vscode.Position(range.end.line + DEFAULT_LINE_CNT, 0),	
-		);
-	}while(!rangeChanged);
+	let lineCnt = fHandle.lineCount;
+
+	while(currLine < lineCnt){
+		let buffDocs = null;
+		while(buffDocs == null && currLine < lineCnt){
+			buffDocs = getDocsBlock(fHandle, currLine, lineCnt);
+			currLine++;
+		}	
+		if(buffDocs == null || lineCnt < buffDocs.nextLine)
+			break;
+		currLine = buffDocs.nextLine;
+		let funcName = getFirstName(fHandle, currLine++);
+		if(funcName.charAt(0) != '.'){
+			let funcInfo = getFuncInfo(funcName);
+			funcInfo.funcInfo = buffDocs.block;
+			addToTable(funcInfo);
+		}
+	}
+
 
 }
 const initIndex = () => {
@@ -198,14 +302,11 @@ function activate(context) {
 			new GoWorkspaceSymbolProvider()
 		)
 	)
+    context.subscriptions.push(
+        vscode.languages.registerCompletionItemProvider(
+            LANG_NAME, new CompletionItemProvider(), ['.']));
 
-	vscode.languages.registerHoverProvider(LANG_NAME,{
-		provideHover(document, position, token){
-			return {
-				contents: ['Hover content']
-			};
-		}
-	});
+	vscode.languages.registerHoverProvider(LANG_NAME, new HoverProvider());
 }
 
 
