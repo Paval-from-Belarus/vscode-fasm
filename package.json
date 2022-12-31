@@ -6,7 +6,7 @@
 	"publisher": "m_rgan",
 	"preview": true,
 	"engines": {
-		"vscode": "^1.43.0"
+		"vscode": "^1.71.0"
 	},
 	"license": "MIT License",
 	"categories": [

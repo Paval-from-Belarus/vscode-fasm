@@ -7,9 +7,9 @@ All notable changes to this project will be documented in this file.
 - Fix strings
 - Fix numbers
 - Fix sections
+## Input
 
-
-
+## Output
 ## Version 0.0.2
 - Release date: June 14, 2021
 ### Change

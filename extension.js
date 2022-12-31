@@ -1,3 +1,4 @@
+const { stringify } = require('querystring');
 const vscode = require('vscode');
 
 const LANG_NAME = 'fasm-x86_64';
@@ -12,15 +13,66 @@ class DescriptionStage {
 	static NotesPart = 3;
 	static AssumePart = 4;
 }
-class Functional {
-	static exctractInputInfo = (arrInfo) => {
 
+
+
+class MarkdownText {
+	/**
+	 * 
+	 * @param {string[]} arrString 
+	 * @returns {string}
+	 */
+	static convert(arrString){
+		if(arrString == null || arrString.length == 0)
+			return '';
+		let strText = arrString[0];
+		for(let i = 1; i < arrString.length - 1; i++){
+			strText = strText.concat('\n')
+		}
+		if(arrString.length != 1){
+			strText = strText.concat('\n', arrString[arrString.length - 1]);
+		}
+		return strText;
+	}
+}
+class Functional {
+	static clearString = (strDirty) => {
+		let arrChar = new Array();
+		strDirty.trim();
+		for(let i = 0; i < strDirty.length; i++){
+			let cSymbol = strDirty.charAt(i);
+			if(cSymbol != '\n' && cSymbol != '\r')
+				arrChar.push(cSymbol);
+		}
+		return arrChar.join('');
+	}
+	static exctractInputInfo = (arrInfo) => {
+		let arrResult = new Array();
+		arrInfo.forEach( (value) => {
+			arrResult.push(Functional.clearString(value));
+		})
+		if(arrResult.length == 0)
+			arrResult = ['None'];
+		return arrResult;
 	}
 	static extractOutputInfo = (arrInfo) => {
-
+		let arrResult = new Array();
+		arrInfo.forEach( (value) => {
+			arrResult.push(Functional.clearString(value));
+		})
+		if(arrResult.length == 0)
+			arrResult = ['None'];
+		return arrResult;
 	}
 	static extractAuxInfo = (arrInfo) => {
-
+		let strResult = '';
+		arrInfo.forEach( (value) =>{
+			let strDummy = Functional.clearString(value);
+			if(strDummy.length != 0){
+				strResult = strResult.concat(strDummy, ' ')
+			}
+		})
+		strResult.trim();
 	}
 	static INPUT_LABEL 	= 'Input';
 	static OUTPUT_LABEL = 'Output';
@@ -44,14 +96,15 @@ class Functional {
 	savePart = (stage, arrInfo) => {
 		switch(stage){
 			case DescriptionStage.InputPart:
-				this.strInput = Functional.exctractInputInfo(arrInfo);
+				this.inputInfo = Functional.exctractInputInfo(arrInfo);
 				break;
 			case DescriptionStage.OutputPart:
-				this.strOutput = Functional.extractOutputInfo(arrInfo);
+				this.outputInfo = Functional.extractOutputInfo(arrInfo);
 				break;
 			case DescriptionStage.AssumePart:
 			case DescriptionStage.NotesPart:
-				this.strNotes = Functional.extractAuxInfo(arrInfo);
+				this.auxInfo = Functional.extractAuxInfo(arrInfo);
+				break;
 			default:
 				console.log('Unknown stage');
 		}
@@ -60,26 +113,35 @@ class Functional {
 
 		let currStage = DescriptionStage.InfoPart;
 		let relOffset = 0;
+		let glOffset  = -1;
 		let strLabel = null;
 		let arrInfoPart = new Array();
 		for(let i = 0; i < rawInfo.length; i++){
 			switch(rawInfo.charAt(i)){
 				case ';':
-					if(relOffset != 0){
-						arrInfoPart.push(rawInfo.substring(i - relOffset, i));
+					if(currStage != DescriptionStage.InfoPart && relOffset != 0){
+						arrInfoPart.push(rawInfo.substring(i - relOffset - glOffset, i));
 					}
 					relOffset = 0;
+					glOffset = 0;
 					break;
 				case '\n':
 				case '\r':
-					relOffset = 0;
+					glOffset += 1;
 					break;
 				case ':':
 					let updStage = this.getStage(rawInfo.substring(i - relOffset, i));
-					currStage = (updStage != DescriptionStage.InfoPart) ? updStage : currStage;
-					if(currStage == updStage && arrInfoPart.length != 0){
-						this.savePart(currStage, arrInfoPart);				
-						arrInfoPart = new Array();
+					if(updStage != DescriptionStage.InfoPart){
+						if(arrInfoPart.length != 0){
+							this.savePart(currStage, arrInfoPart);				
+							arrInfoPart = new Array();
+						}
+						currStage = updStage;
+						relOffset = 0;
+						glOffset = 0;
+					}
+					else {
+						glOffset += 1;
 					}
 					break;
 				default:
@@ -90,12 +152,14 @@ class Functional {
 			this.savePart(currStage, arrInfoPart);	
 	}
 
-	strInput = null;
-	strOutput = null;
-	strNotes = null;
+	inputInfo = null;
+	outputInfo = null;
+	auxInfo = null;
 	getHover = () => {
-		let result = new vscode.Hover([this.strInput, '|', this.strOutput]);
-		return result;
+		let strBefore =  ('Input: ' + MarkdownText.convert(this.inputInfo) +
+		'; Output: ' + MarkdownText.convert(this.outputInfo));
+		let strAfter = new vscode.MarkdownString(strBefore);
+		return new vscode.Hover(strAfter);
 	}
 	getCompletion = () => {
 
@@ -136,6 +200,21 @@ class FuncModule {
 				break;
 		}
 		return bResult;
+	}
+
+	/**
+	 * 
+	 * @param {string} funcName 
+	 * @returns {FuncHashNode}
+	 */
+	get = (funcName) => {
+		let iFunc = 0;
+		let nodeResult = null;
+		while(nodeResult == null && iFunc < this.arrFunc.length){
+			nodeResult = this.arrFunc[iFunc].funcName == funcName ? this.arrFunc[iFunc] : null;
+			iFunc++;
+		}
+		return nodeResult;
 	}
 
 }
@@ -310,6 +389,19 @@ const convertFuncInfo = (funcInfo) => {
 	//after doate: <Method>
 class UserInput {
 	static arrString;
+	static munchExtract = (document, cursorPos) => {
+		let strBuffer = document.lineAt(cursorPos.line).text;
+		let iStart = cursorPos.character;
+		if(strBuffer.charAt(iStart) != ' '){
+			iStart += 1;
+			while(iStart < strBuffer.length && strBuffer.charAt(iStart) != ' ')
+				iStart += 1;
+			UserInput.extract(document, new vscode.Position(cursorPos.line, iStart));
+		}
+		else {
+			UserInput.arrString = ['', ''];
+		}
+	}
 	static extract = (document, cursorPos) => {
 		let strBuffer = document.lineAt(cursorPos.line).text;
 		let iEnd = cursorPos.character - 1;
@@ -356,8 +448,15 @@ const getHoverInfo = (moduleName, funcName) => {
 }
 class HoverProvider {
 	provideHover(document, position, token){
-		let hoverInfo = getHoverInfo('Files', 'readFile');
-		return hoverInfo;
+		UserInput.munchExtract(document, position);
+		let moduleName = UserInput.extractModule();
+		let funcName = UserInput.extractMethod();
+		if(moduleName == null)
+			moduleName = DUMYY_MODULE_NAME;
+		let funcNode = hashTable.getModule(moduleName).get(funcName);
+		if(funcNode == null)
+			return null;
+		return funcNode.funcInfo.getHover();
 	}
 }
 class CompletionItemProvider {
