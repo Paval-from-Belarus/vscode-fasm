@@ -1,6 +1,6 @@
+import { LANG_NAME, CONFIG_HEADER } from './src/General.js';
 const vscode = require('vscode');
-const LANG_NAME = 'fasm-x86_64';
-const CONFIG_HEADER = 'fasm';
+
 
 let CompillerPath;
 let WorkDirectoryPath;
@@ -27,7 +27,7 @@ const getHashCode = (moduleName) => {
 const getFuncInfo = (funcName) => {
 	let hasModule = (funcName.indexOf('.') > - 1);
 	let moduleName = DUMYY_MODULE_NAME;
-	let funcInfo = new FuncInfo();
+	let funcInfo = new FuncHashNode();
 	funcInfo.hasModule = hasModule;
 	if(hasModule){
 		let arrString = funcName.split('.', 2);
@@ -41,12 +41,103 @@ const getFuncInfo = (funcName) => {
 }
 
 //Automatically parse input string onto sequence
-class FuncInfo {
-	strInput;
-	strOutput;
-	strNotes;
-	FuncInfo(strInfo){
-		
+//format of strInfo: <;Input:... ;Ouput:...;Notes:...>
+
+class DescriptionStage {
+	static InfoPart = 0;
+	static InputPart = 1;
+	static OutputPart = 2;
+	static NotesPart = 3;
+	static AssumePart = 4;
+}
+class FuncDescription {
+	static exctractInputInfo = (arrInfo) => {
+
+	}
+	static extractOutputInfo = (arrInfo) => {
+
+	}
+	static extractAuxInfo = (arrInfo) => {
+
+	}
+	static INPUT_LABEL 	= 'Input';
+	static OUTPUT_LABEL = 'Output';
+	static NOTE_LABEL	= 'Notes';
+	static ASSUME_LABEL	= 'Assume';
+	
+	getStage = (strLabel) => {
+		switch(strLabel){
+			case FuncDescription.INPUT_LABEL:
+				return DescriptionStage.InputPart;
+			case FuncDescription.OUTPUT_LABEL:
+				return DescriptionStage.OutputPart;
+			case FuncDescription.ASSUME_LABEL:
+				return DescriptionStage.AssumePart;
+			case FuncDescription.NOTE_LABEL:
+				return DescriptionStage.NotesPart;
+			default:
+				return DescriptionStage.InfoPart;
+		}
+	}
+	savePart = (stage, arrInfo) => {
+		switch(stage){
+			case DescriptionStage.InputPart:
+				this.strInput = FuncDescription.exctractInputInfo(arrInfo);
+				break;
+			case DescriptionStage.OutputPart:
+				this.strOutput = FuncDescription.extractOutputInfo(arrInfo);
+				break;
+			case DescriptionStage.AssumePart:
+			case DescriptionStage.NotesPart:
+				this.strNotes = FuncDescription.extractAuxInfo(arrInfo);
+			default:
+				console.log('Unknown stage');
+		}
+	}
+	constructor (rawInfo){
+
+
+		let currStage = DescriptionStage.InfoPart;
+		let relOffset = 0;
+		let strLabel = null;
+		let arrInfoPart = new Array();
+		for(let i = 0; i < rawInfo.length; i++){
+			switch(rawInfo.charAt(i)){
+				case ';':
+					if(relOffset != 0){
+						arrInfoPart.push(rawInfo.substring(i - relOffset, i));
+					}
+					relOffset = 0;
+					break;
+				case '\n':
+				case '\r':
+					relOffset = 0;
+					break;
+				case ':':
+					let updStage = this.getStage(rawInfo.substring(i - relOffset, i));
+					currStage = (updStage != DescriptionStage.InfoPart) ? updStage : currStage;
+					if(currStage == updStage && arrInfoPart.length != 0){
+						this.savePart(currStage, arrInfoPart);				
+						arrInfoPart = new Array();
+					}
+					break;
+				default:
+					relOffset += 1;
+			}
+		}	
+		if(arrInfoPart.length != 0)
+			this.savePart(currStage, arrInfoPart);	
+	}
+
+	strInput = null;
+	strOutput = null;
+	strNotes = null;
+	getHover = () => {
+		let result = new vscode.Hover([this.strInput, '|', this.strOutput]);
+		return result;
+	}
+	getCompletion = () => {
+
 	}
 }
 class FuncModule {
@@ -64,7 +155,7 @@ class FuncModule {
 	}
 
 }
-class FuncInfo {
+class FuncHashNode {
 	hashKey;
 	funcName;
 	funcInfo;
@@ -73,6 +164,30 @@ class FuncInfo {
 }
 const hashTable = new Array(MAX_FUNC_MODULE_CNT);
 const arrFiles = new Array(INDEX_FILE_CNT);
+const arrModules = new Array(); // Index of modules
+//pointer to moduleHead
+const saveModuleHead = (moduleHead) => {
+	if(!arrModules.includes(moduleHead))
+		arrModules.push(moduleHead);
+
+}
+//moduleName can be not completed name
+//return array of similar heads
+const getSimilarHeads = (moduleName) => {
+	let dummyHeads = new Array();
+	let probeHead = getModuleHead(moduleName);
+	if(probeHead == null){
+		for(let i = 0; i < arrModules.length; i++){
+			if(arrModules[i].selfName.includes(moduleName)){
+				dummyHeads.push(arrModules[i]);
+			}
+		}
+	}
+	else {
+		dummyHeads.push(probeHead);
+	}
+	return dummyHeads;
+}
 
 //return null if module is not exists
 const getModuleHead = (moduleName) => {
@@ -88,11 +203,11 @@ const getModuleHead = (moduleName) => {
 	return null;
 }
 
-
 let lastFileIndex = -1;
 const addToTable = (funcInfo) => {
 	let moduleHead = hashTable.at(funcInfo.hashKey);
 	let moduleName;
+	
 	if(funcInfo.hasModule){
 		let strBuffer = funcInfo.funcName.split('.', 2);
 		moduleName = strBuffer[0];
@@ -105,6 +220,8 @@ const addToTable = (funcInfo) => {
 		moduleHead = new FuncModule();
 		hashTable[funcInfo.hashKey] = moduleHead;
 		moduleHead.selfName = moduleName;
+		if(funcInfo.hasModule)
+			saveModuleHead(moduleHead);
 	}
 	else {
 		while(moduleHead.nextModule != null && moduleHead.selfName != moduleName)
@@ -113,6 +230,8 @@ const addToTable = (funcInfo) => {
 			moduleHead.nextModule = new FuncModule();
 			moduleHead = moduleHead.nextModule;
 			moduleHead.selfName = moduleName;
+			if(funcInfo.hasModule)
+				saveModuleHead(moduleHead); //save moduleHead in Index array
 		}
 	}
 	if(moduleHead.arrFunc == null){
@@ -120,50 +239,28 @@ const addToTable = (funcInfo) => {
 	}
 	if(!moduleHead.contains(funcInfo.funcName))
 		moduleHead.arrFunc.push(funcInfo);
-	else 
-		{
-			let x = 10;
-			x += 12;
-		}
-
-}
-class GoWorkspaceSymbolProvider  {
-    provideWorkspaceSymbols(query, token){
-		arrResult = new vscode.SymbolInformation();
-    }
-}
-
-const convertFuncInfo = () => {
-
-}
-//funcName is part of whole name
-//insert part name 
-getCompletionItems = (moduleName, funcName) => {
-	let moduleHead = getModuleHead(moduleName);
-	let arrItems = new Array();
-	if(moduleHead == null)
-		return null;
-	moduleHead.arrFunc.forEach( (funcInfo) => {
-		if(funcInfo.funcName.includes(funcName) ) { //skip module name
-				arrItems.push(
-					new vscode.CompletionItem(funcInfo.funcName, vscode.CompletionItemKind.Function)
-				);
-		}
-	})
-	return arrItems;
-}
-class HoverProvider {
-	provideHover(document, position, token){
-
-		return {
-			contents: ['Hover content']
-		};
+	else {
+		let x = 10;
+		x += 23;
 	}
-}
-class CompletionItemProvider {
 
-	arrString;
-	extract = (document, cursorPos) => {
+}
+
+const convertFuncInfo = (funcInfo) => {
+	let lblItem = {
+		label: funcInfo.funcName,
+		description: funcInfo.funcInfo.strInput + funcInfo.funcInfo.strOutput,
+	}
+	return lblItem;
+}
+
+
+//Notes: separate user input onto two parts:
+	//before dote: <Module>
+	//after doate: <Method>
+class UserInput {
+	static arrString;
+	static extract = (document, cursorPos) => {
 		let strBuffer = document.lineAt(cursorPos.line).text;
 		let iEnd = cursorPos.character - 1;
 		let iStart = iEnd;
@@ -173,7 +270,7 @@ class CompletionItemProvider {
 		this.arrString = strBuffer.substring(iStart, iEnd + 1).split('.', 2);
 	}
 	//it can be only part of real module name
-	extractModule = () => {
+	static extractModule = () => {
 		let moduleName;
 		if(this.arrString.length == 1 || this.arrString[0].length == 0)
 			moduleName == null;
@@ -183,7 +280,7 @@ class CompletionItemProvider {
 								//upperCase letter
 		return moduleName;
 	}
-	extractLabel = () => {
+	static extractMethod = () => {
 		let lblName;
 		if(this.arrString.length == 1){
 			lblName = this.arrString[0];
@@ -193,14 +290,91 @@ class CompletionItemProvider {
 		}
 		return lblName;
 	}
+}
+const getHoverInfo = (moduleName, funcName) => {
+	let moduleHead = getModuleHead(moduleName);
+	if(moduleHead == null || !moduleHead.contains(funcName))
+		return null;
+	let funcInfo;
+	for(let iNode = 0; iNode < moduleHead.arrFunc.length; iNode++){
+		if(moduleHead.arrFunc[iNode].funcName == funcName){
+			funcInfo = moduleHead.arrFunc[iNode].funcInfo;
+			break;
+		}
+	}
+	return funcInfo.getHover();
+}
+class HoverProvider {
+	provideHover(document, position, token){
+		let hoverInfo = getHoverInfo('Files', 'readFile');
+		return hoverInfo;
+	}
+}
+class CompletionItemProvider {
+
+	getModuleItems = (moduleName) => {
+			let arrModules = getSimilarHeads(moduleName);
+			let arrItems = new Array();
+			arrModules.forEach( (moduleHead) => {
+				arrItems.push(
+					new vscode.CompletionItem(moduleHead.selfName, vscode.CompletionItemKind.Class)
+				)
+			});
+			return arrItems;
+	}
+	getFuncItems = (moduleName, funcName) => {
+		let moduleHead = getModuleHead(moduleName);
+		let arrItems = new Array();
+		if(moduleHead == null)
+			return null;
+
+		moduleHead.arrFunc.forEach( (funcInfo) => {
+			if(funcInfo.funcName.includes(funcName) ) { //skip module name
+					arrItems.push(
+						new vscode.CompletionItem(funcInfo.funcName, vscode.CompletionItemKind.Function)
+					);
+			}
+		})
+		return arrItems;
+	}
+	//funcName is part of whole name
+	//insert part name 
+	/**
+	 * 
+	 * @param {string} moduleName 
+	 * @param {string | undefined} funcName : if undefined: any method name
+	 * @returns suitable CompetionItem (probable null items)
+	 */
+	getItems = (moduleName, funcName) => {
+		let arrItems;
+		if(funcName != undefined)
+			arrItems = this.getFuncItems(moduleName, funcName);
+		else
+			arrItems = this.getModuleItems(moduleName);
+		return arrItems;
+	}
     provideCompletionItems(
         document, position, token){
-			this.extract(document, position);
-			let moduleName = this.extractModule();
-			if(moduleName == null)
+			let moduleName;
+			let funcName;
+			let arrItems = new Array();
+
+			UserInput.extract(document, position);
+			moduleName = UserInput.extractModule();
+			funcName = UserInput.extractMethod();
+			if(moduleName == null){
+				let moduleItems = this.getItems(funcName, undefined);
+				if(moduleItems != null){
+					moduleItems.forEach((moduleItem) => {
+						arrItems.push(moduleItem)
+					})
+				}
 				moduleName = DUMYY_MODULE_NAME;
-			let funcName = this.extractLabel();
-			let arrItems = getCompletionItems(moduleName, funcName);
+			}
+			this.getItems(moduleName, funcName).forEach((funcItem) => {
+				arrItems.push(funcItem)
+			})
+			
 			return arrItems;
     }
 }
@@ -254,7 +428,7 @@ const addToIndex = (fHandle) => {
 		let funcName = getFirstName(fHandle, currLine++);
 		if(funcName.charAt(0) != '.'){
 			let funcInfo = getFuncInfo(funcName);
-			funcInfo.funcInfo = buffDocs.block;
+			funcInfo.funcInfo = new FuncDescription(buffDocs.block);
 			addToTable(funcInfo);
 		}
 	}
@@ -271,7 +445,7 @@ const initIndex = () => {
 			vscode.window.showInformationMessage('No source file to index');
 		}
 		arrFiles.forEach((fileUri) => {
-			fHandle = vscode.workspace.openTextDocument(fileUri);
+			let fHandle = vscode.workspace.openTextDocument(fileUri);
 			fHandle.then((file) => {
 				saveSourceFile(file.fileName);
 				addToIndex(file);
@@ -297,14 +471,9 @@ function activate(context) {
 	initGlobals();
 	let disposable = vscode.commands.registerCommand('fasm.initIndex', initIndex);	
 	context.subscriptions.push(disposable);
-	context.subscriptions.push(
-		vscode.languages.registerWorkspaceSymbolProvider(
-			new GoWorkspaceSymbolProvider()
-		)
-	)
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider(
-            LANG_NAME, new CompletionItemProvider(), ['.']));
+            LANG_NAME, new CompletionItemProvider(), '.'));
 
 	vscode.languages.registerHoverProvider(LANG_NAME, new HoverProvider());
 }
