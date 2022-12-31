@@ -1,7 +1,280 @@
-const Description = import('./src/Description.mjs');
-const HashTable = import('./src/HashTable.mjs');
-const General = import('./src/General.mjs');
 const vscode = require('vscode');
+
+const LANG_NAME = 'fasm-x86_64';
+const CONFIG_HEADER = 'fasm';
+const INDEX_FILE_CNT = 300;
+const MAX_FUNC_MODULE_CNT = 100;
+//description module
+class DescriptionStage {
+	static InfoPart = 0;
+	static InputPart = 1;
+	static OutputPart = 2;
+	static NotesPart = 3;
+	static AssumePart = 4;
+}
+class Functional {
+	static exctractInputInfo = (arrInfo) => {
+
+	}
+	static extractOutputInfo = (arrInfo) => {
+
+	}
+	static extractAuxInfo = (arrInfo) => {
+
+	}
+	static INPUT_LABEL 	= 'Input';
+	static OUTPUT_LABEL = 'Output';
+	static NOTE_LABEL	= 'Notes';
+	static ASSUME_LABEL	= 'Assume';
+	
+	getStage = (strLabel) => {
+		switch(strLabel){
+			case Functional.INPUT_LABEL:
+				return DescriptionStage.InputPart;
+			case Functional.OUTPUT_LABEL:
+				return DescriptionStage.OutputPart;
+			case Functional.ASSUME_LABEL:
+				return DescriptionStage.AssumePart;
+			case Functional.NOTE_LABEL:
+				return DescriptionStage.NotesPart;
+			default:
+				return DescriptionStage.InfoPart;
+		}
+	}
+	savePart = (stage, arrInfo) => {
+		switch(stage){
+			case DescriptionStage.InputPart:
+				this.strInput = Functional.exctractInputInfo(arrInfo);
+				break;
+			case DescriptionStage.OutputPart:
+				this.strOutput = Functional.extractOutputInfo(arrInfo);
+				break;
+			case DescriptionStage.AssumePart:
+			case DescriptionStage.NotesPart:
+				this.strNotes = Functional.extractAuxInfo(arrInfo);
+			default:
+				console.log('Unknown stage');
+		}
+	}
+	constructor (rawInfo){
+
+		let currStage = DescriptionStage.InfoPart;
+		let relOffset = 0;
+		let strLabel = null;
+		let arrInfoPart = new Array();
+		for(let i = 0; i < rawInfo.length; i++){
+			switch(rawInfo.charAt(i)){
+				case ';':
+					if(relOffset != 0){
+						arrInfoPart.push(rawInfo.substring(i - relOffset, i));
+					}
+					relOffset = 0;
+					break;
+				case '\n':
+				case '\r':
+					relOffset = 0;
+					break;
+				case ':':
+					let updStage = this.getStage(rawInfo.substring(i - relOffset, i));
+					currStage = (updStage != DescriptionStage.InfoPart) ? updStage : currStage;
+					if(currStage == updStage && arrInfoPart.length != 0){
+						this.savePart(currStage, arrInfoPart);				
+						arrInfoPart = new Array();
+					}
+					break;
+				default:
+					relOffset += 1;
+			}
+		}	
+		if(arrInfoPart.length != 0)
+			this.savePart(currStage, arrInfoPart);	
+	}
+
+	strInput = null;
+	strOutput = null;
+	strNotes = null;
+	getHover = () => {
+		let result = new vscode.Hover([this.strInput, '|', this.strOutput]);
+		return result;
+	}
+	getCompletion = () => {
+
+	}
+}
+const DUMYY_MODULE_NAME = "@@Dummy_Module@@";
+class FuncModule {
+	arrFunc;
+	selfName;
+	nextModule; //linked list of FuncModule
+    /**
+     * 
+     * @param {string} moduleName 
+     */
+    constructor(moduleName) {
+        this.arrFunc = new Array();
+        this.selfName = moduleName;
+        this.nextModule = null;
+    }
+    /**
+     * 
+     * @param {FuncHashNode} funcNode 
+     */
+    add = (funcNode) =>{
+        if(!this.contains(funcNode.funcName))
+            this.arrFunc.push(funcNode);
+    }
+    /**
+     * 
+     * @param {string} funcName 
+     * @returns boolean;
+     */
+	contains = (funcName) => {
+		let bResult = false;
+		for(let iFunc = 0; iFunc < this.arrFunc.length; iFunc++){
+			bResult = this.arrFunc.at(iFunc).funcName == funcName;
+			if(bResult)
+				break;
+		}
+		return bResult;
+	}
+
+}
+class FuncHashNode {
+    /**
+     * 
+     * @param {string} funcName 
+     * @param {Functional} funcInfo 
+     */
+    constructor(funcName, funcInfo) {
+        this.hasModule = (funcName.indexOf('.') > - 1);
+        if(!this.hasModule){
+            funcName = DUMYY_MODULE_NAME + '.' + funcName;
+        }
+        let nameLength = funcName.charAt(funcName.length - 1) == ':' ? funcName.length - 1 : funcName.length;
+        this.funcName =  funcName.substring(0, nameLength);
+        this.funcInfo = funcInfo;
+    }
+    /**
+     * 
+     * @param {number} sourceId 
+     */
+    setSourceId = (sourceId) => {
+        this.sourceId = sourceId;
+    }
+    /**
+     * 
+     * @param {number} hashKey 
+     */
+    setHashKey = (hashKey) =>{
+        this.hashKey = hashKey;
+    }
+	funcName;
+	funcInfo;
+	hasModule;
+	sourceId;
+    hashKey;
+}
+
+class HashIndex {
+    /**
+     * 
+     * @param {number} init_capacity 
+     */
+    constructor(init_capacity){
+        this.table = new Array(init_capacity)
+        this.moduleIndex = new Array(init_capacity);
+    }
+    table;
+    moduleIndex;
+    
+    /**
+     * 
+     * @param {FuncModule} moduleHead 
+     */
+    saveModule = (moduleHead) => {
+        if(!this.moduleIndex.includes(moduleHead))
+            this.moduleIndex.push(moduleHead);
+    }
+    /**
+     * 
+     * @param {FuncHashNode} funcNode 
+     */
+    add = (funcNode) => {
+		let moduleHead;
+        let arrString = funcNode.funcName.split('.', 2); //module and funcName
+        let moduleName = arrString[0];
+        funcNode.funcName = arrString[1];
+        funcNode.hashKey = this.getHashCode(moduleName);
+		moduleHead = this.table[funcNode.hashKey];
+        if(moduleHead == null){
+            moduleHead = new FuncModule(moduleName);
+            this.table[funcNode.hashKey] = moduleHead;
+            if(funcNode.hasModule)
+                this.saveModule(moduleHead);
+        }
+        else {
+            while(moduleHead.nextModule != null && moduleHead.selfName != moduleName)
+                moduleHead = moduleHead.nextModule;
+            if(moduleHead.selfName != moduleName){
+                moduleHead.nextModule = new FuncModule(moduleName);
+                moduleHead = moduleHead.nextModule;
+                if(funcNode.hasModule)
+                    this.saveModule(moduleHead); //save moduleHead in Index array
+            }
+        }
+        moduleHead.add(funcNode);
+    
+    }
+    /**
+     * 
+     * @param {string} moduleName 
+     */
+    getHashCode = (moduleName) => {
+        let sum = 0;
+        let factor = 13;
+        for(let i = 0; i < moduleName.length; i++)
+            sum += moduleName.charCodeAt(i) * factor;
+        return sum % this.table.length;
+    }
+    /**
+     * 
+     * @param {string} moduleName 
+     * @returns {FuncModule}
+     */
+    getModule = (moduleName) => {
+        let iTable = this.getHashCode(moduleName);
+        let moduleHead = this.table[iTable];
+        if(moduleHead != null){
+            while(moduleHead.nextModule != null && moduleHead.selfName != moduleName){
+                moduleHead = moduleHead.nextModule;
+            }
+            if(moduleHead.selfName != moduleName)
+                moduleHead = null;
+        }
+        return moduleHead;
+    }
+    /**
+     * 
+     * @param {string} moduleName 
+     * @returns {FuncModule[]} 
+     */
+    getModules = (moduleName) => {
+        let dummyHeads = new Array();
+        let probeHead = this.getModule(moduleName);
+        if(probeHead == null){
+            this.moduleIndex.forEach( (moduleHead) => {
+                if(moduleHead.selfName.includes(moduleName))
+                    dummyHeads.push(moduleHead);
+            })
+        }
+        else {
+            dummyHeads.push(probeHead);
+        }
+        return dummyHeads;
+
+    }
+}
+
 
 let CompillerPath;
 let WorkDirectoryPath;
@@ -18,8 +291,8 @@ const saveSourceFile = (fullName) => {
 const getLastSourceIndex = () => lastFileIndex;
 
 
-const hashTable = new HashTable.HashIndex(General.MAX_FUNC_MODULE_CNT);
-const arrFiles = new Array(General.INDEX_FILE_CNT);
+const hashTable = new HashIndex(MAX_FUNC_MODULE_CNT);
+const arrFiles = new Array(INDEX_FILE_CNT);
 let lastFileIndex = -1;
 
 
@@ -146,7 +419,7 @@ class CompletionItemProvider {
 						arrItems.push(moduleItem)
 					})
 				}
-				moduleName = HashTable.DUMYY_MODULE_NAME;
+				moduleName = DUMYY_MODULE_NAME;
 			}
 			this.getItems(moduleName, funcName).forEach((funcItem) => {
 				arrItems.push(funcItem)
@@ -204,8 +477,8 @@ const addToIndex = (fHandle) => {
 		currLine = buffDocs.nextLine;
 		let funcName = getFirstName(fHandle, currLine++);
 		if(funcName.charAt(0) != '.'){ //if not internal label
-			let funcNode = new HashTable.FuncHashNode(funcName, 
-											new Description.Functional(buffDocs.block));
+			let funcNode = new FuncHashNode(funcName, 
+											new Functional(buffDocs.block));
 			funcNode.setSourceId(getLastSourceIndex());
 			hashTable.add(funcNode);
 		}
@@ -214,7 +487,7 @@ const addToIndex = (fHandle) => {
 
 }
 const initIndex = () => {
-	let filesPromise = vscode.workspace.findFiles("*.asm", undefined, General.INDEX_FILE_CNT);
+	let filesPromise = vscode.workspace.findFiles("*.asm", undefined, INDEX_FILE_CNT);
 	const rejectedFunc = (reason) => {
 		vscode.window.showInformationMessage(reason)
 	};
@@ -239,7 +512,7 @@ const initIndex = () => {
 };
 const initGlobals = () => {
 	WorkDirectoryPath = vscode.workspace.workspaceFolders[0].uri.path;
-	CompillerPath = vscode.workspace.getConfiguration(General.CONFIG_HEADER).get('compiller');
+	CompillerPath = vscode.workspace.getConfiguration(CONFIG_HEADER).get('compiller');
 }
 
 /**
@@ -251,9 +524,9 @@ function activate(context) {
 	context.subscriptions.push(disposable);
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider(
-            General.LANG_NAME, new CompletionItemProvider(), '.'));
+            LANG_NAME, new CompletionItemProvider(), '.'));
 
-	vscode.languages.registerHoverProvider(General.LANG_NAME, new HoverProvider());
+	vscode.languages.registerHoverProvider(LANG_NAME, new HoverProvider());
 }
 
 
