@@ -1,12 +1,15 @@
 {
 	"name": "fasm-assembly",
-	"displayName": "Fasm highlight",
+	"displayName": "Fasm highlighting",
 	"description": "Fasm x86_64 assembly syntax highlighting",
 	"version": "0.0.1",
 	"publisher": "Paval-from-Belarus",
-	"preview": true,
 	"engines": {
 		"vscode": "^1.71.0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Paval-from-Belarus/vscode-fasm.git"
 	},
 	"license": "MIT License",
 	"categories": [
@@ -87,7 +90,7 @@
 		"@types/glob": "^8.0.0",
 		"@types/mocha": "^10.0.1",
 		"@types/node": "17.x",
-		"@types/vscode": "^1.74.0",
+		"@types/vscode": "^1.71.0",
 		"@vscode/test-electron": "^2.2.0",
 		"eslint": "^8.28.0",
 		"glob": "^8.0.3",
