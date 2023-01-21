@@ -15,7 +15,23 @@ class DescriptionStage {
 }
 
 
-
+class SimpleText {
+		/**
+	 * 
+	 * @param {DocsLine[]} arrDocsLine 
+	 * @returns {string}
+	 */
+	static convert = (arrDocsLine) => {
+		let strResult = '';
+		let title = '';
+		arrDocsLine.forEach( (docLine) => {
+			if(docLine.hasTitle())
+				title = `${docLine.title} ${Keyword.LONG_DASH} `
+			strResult = strResult + title + ` ${docLine.text}\n`;
+		});
+		return strResult;
+	}
+}
 class MarkdownText {
 	
 	static toTitle = (/** @type {string} */ strText) => {
@@ -50,16 +66,21 @@ class MarkdownText {
 	 * @returns {string}
 	 */
 	static convert(arrDocsLine){
-		let result = '';
+		let title = '';
+		let text = '';
 		let arrLines = arrDocsLine.map( (docsLine)=>{
-			let title = MarkdownText.toItalic(docsLine.title);
-			let text = MarkdownText.toRegular(docsLine.text);
-			return title + ` ${Keyword.LONG_DASH} ` + text;
+			if(docsLine.hasTitle())
+				title = MarkdownText.toItalic(docsLine.title) + ` ${Keyword.LONG_DASH} `;
+			else
+				title = '';
+			text = MarkdownText.toRegular(docsLine.text);
+			return title +  text;
 		});
 		return MarkdownText.toList(arrLines, false);
 	}
 }
 class Keyword {
+	static DelimType = {Default: 0, Small: 1, Long: 2}
 	static LONG_DASH = '—';
 	static arrInfoDelim = ['->', '-', '--'];
 	static isGarbageChar =(/** @type {string} */ char) => {
@@ -74,6 +95,11 @@ class Keyword {
 		})
 		return bResult;
 	}
+	static getDocsDelim = (delimType = Keyword.DelimType.Default) => {
+		if(delimType > Keyword.DelimType.Long)
+			delimType = Keyword.DelimType.Default;
+		return this.arrInfoDelim[delimType];
+	}
 }
 class DocsLine {
 	title = '';
@@ -86,38 +112,64 @@ class DocsLine {
 		this.title = title;
 		this.text = text;
 	}
-
+	isEmpty =  () => {
+		if(this.text.length == 0)
+			return true;
+		return false;
+	}
+	hasTitle = () => {
+		return this.title.length != 0;
+	}
+	append = (/**@type {string} */ strValue) => {
+		this.text = this.text + ' ' + strValue;
+	}
 	static resultOf = (/** @type {string} */ rawLine)  =>{
 		let offset = 0;
-		let lineHeader;
+		let lineHeader = '';
 		let stage = 0;
+		let strDelim = Keyword.getDocsDelim();
 		for(let i = 0; i < rawLine.length; i++){
 			let symbol = rawLine.charAt(i);
 			if (stage == 0){
-				if(Keyword.isGarbageChar(symbol)  || Keyword.isDocsInfoDelim(symbol)) {
-					lineHeader = rawLine.substring(0, i);
-					stage = 1;
+				stage = 1;
+				let delimOffset = rawLine.indexOf(strDelim);
+				if(delimOffset != -1) {
+					lineHeader = rawLine.substring(0, rawLine.lastIndexOf(' ', delimOffset));
+					i = delimOffset + strDelim.length;
 				}
+				else 
+				  i -= 1;
 			}
 			else 
-				if(!Keyword.isGarbageChar(symbol) && !Keyword.isDocsInfoDelim(symbol)){
+				if(!Keyword.isGarbageChar(symbol)){
 					offset = i;
 					break;
 				}
 		}
 		return new DocsLine(lineHeader, rawLine.substring(offset, rawLine.length));
 	}
+	
 }
 class Functional {
 	static clearString = (/** @type {string} */ strDirty) => {
-		strDirty.trim();
+		strDirty = strDirty.trim();
 		return strDirty;
 	}
 	static extractInfo = (/** @type {String[]} */ arrInfo) => {
 		let arrResult = new Array();
+		let lastLine = null;
+		let currLine;
 		arrInfo.forEach( (value) => {
 			value = Functional.clearString(value);
-			arrResult.push(DocsLine.resultOf(value));
+			currLine = DocsLine.resultOf(value);
+			if(lastLine != null && !currLine.hasTitle() && lastLine.hasTitle()){
+				lastLine.append(currLine.text);
+				currLine = lastLine;
+			}
+			else {
+				lastLine = currLine;
+				arrResult.push(currLine);
+			}
 		})
 		if(arrResult.length == 0)
 			arrResult = ['None'];
@@ -126,11 +178,11 @@ class Functional {
 	static exctractInputInfo = (/** @type {String[]} */ arrInfo) => {
 		return Functional.extractInfo(arrInfo);
 	}
-	static extractOutputInfo = (arrInfo) => {
+	static extractOutputInfo = (/** @type {String[]} */arrInfo) => {
 		return Functional.extractInfo(arrInfo);
 	}
-	static extractAuxInfo = (arrInfo) => {
-		return null;
+	static extractAuxInfo = (/** @type {String[]} */ arrInfo) => {
+		return Functional.extractInfo(arrInfo);
 	}
 	static INPUT_LABEL 	= 'Input';
 	static OUTPUT_LABEL = 'Output';
@@ -174,7 +226,6 @@ class Functional {
 		let currStage = DescriptionStage.InfoPart;
 		let relOffset = 0;
 		let glOffset  = -1;
-		let strLabel = null;
 		let arrInfoPart = new Array();
 		for(let i = 0; i < rawInfo.length; i++){
 			switch(rawInfo.charAt(i)){
@@ -215,39 +266,63 @@ class Functional {
 	/**
 	 * @type {DocsLine[]}
 	 */
-	inputInfo;
+	inputInfo = [];
 	/**
 	 * @type {DocsLine[]}
 	 */
-	outputInfo;
+	outputInfo = [];
 	/**
 	 * @type {DocsLine[]}
 	 */
-	auxInfo;
+	auxInfo = [];
+
+	static PART_TITLES = [Functional.INPUT_LABEL, Functional.OUTPUT_LABEL, Functional.NOTE_LABEL];
 	getHover = () => {
-		let strValue =  (MarkdownText.toTitle('Input') + MarkdownText.convert(this.inputInfo) +
-						MarkdownText.toTitle('Output') + MarkdownText.convert(this.outputInfo));
+		let strValue = '';
+		let arrTitle = Functional.PART_TITLES;
+		[this.inputInfo, this.outputInfo, this.auxInfo].forEach( (arrLines, index) => {
+			if(arrLines.length != 0){ 
+				strValue += MarkdownText.toTitle(arrTitle[index]) + MarkdownText.convert(arrLines);
+			}
+
+		});
 		let strMarkdown = new vscode.MarkdownString(strValue);
-		
+
 		return new vscode.Hover(strMarkdown);
 	}
 	getCompletion = () => {
+		let arrTitle = Functional.PART_TITLES;
+		let strResult = '';
+		[this.inputInfo, this.outputInfo, this.auxInfo].forEach( (arrLines, index) =>{
+			if(arrLines.length != 0){
+				strResult += arrTitle[index] + '\n' + SimpleText.convert(arrLines);	
+			}
+		});
 
+
+		return strResult;
 	}
 }
 const DUMYY_MODULE_NAME = "@@Dummy_Module@@";
 class FuncModule {
-	arrFunc;
-	selfName;
-	nextModule; //linked list of FuncModule
+	/**
+	 * @type {FuncHashNode[]}
+	 */
+	arrFunc = [];
+	/**
+	 * @type {string}
+	 */
+	selfName = '';
+	/**
+	 * @type {FuncModule}
+	 */
+	nextModule = null; //linked list of FuncModule
     /**
      * 
      * @param {string} moduleName 
      */
     constructor(moduleName) {
-        this.arrFunc = new Array();
         this.selfName = moduleName;
-        this.nextModule = null;
     }
     /**
      * 
@@ -320,7 +395,13 @@ class FuncHashNode {
 	funcName;
 	funcInfo;
 	hasModule;
+	/**
+	 * @type {number}
+	 */
 	sourceId;
+	/**
+	 * @type {number}
+	 */
     hashKey;
 }
 
@@ -420,8 +501,12 @@ class HashIndex {
             dummyHeads.push(probeHead);
         }
         return dummyHeads;
-
     }
+	clear = () => {
+		let oldCapacity = this.table.length;
+		this.table = new Array(oldCapacity);
+		this.moduleIndex = new Array(oldCapacity);
+	}
 }
 
 
@@ -444,20 +529,13 @@ const hashTable = new HashIndex(MAX_FUNC_MODULE_CNT);
 const arrFiles = new Array(INDEX_FILE_CNT);
 let lastFileIndex = -1;
 
-
-const convertFuncInfo = (funcInfo) => {
-	let lblItem = {
-		label: funcInfo.funcName,
-		description: funcInfo.funcInfo.strInput + funcInfo.funcInfo.strOutput,
-	}
-	return lblItem;
-}
-
-
 //Notes: separate user input onto two parts:
 	//before dote: <Module>
 	//after doate: <Method>
 class UserInput {
+	/**
+	 * @type {string[]}
+	 */
 	static arrString;
 	static munchExtract = (document, cursorPos) => {
 		let strBuffer = document.lineAt(cursorPos.line).text;
@@ -503,19 +581,6 @@ class UserInput {
 		return lblName;
 	}
 }
-const getHoverInfo = (moduleName, funcName) => {
-	let moduleHead = hashTable.getModule(moduleName);
-	if(moduleHead == null || !moduleHead.contains(funcName))
-		return null;
-	let funcInfo;
-	for(let iNode = 0; iNode < moduleHead.arrFunc.length; iNode++){
-		if(moduleHead.arrFunc[iNode].funcName == funcName){
-			funcInfo = moduleHead.arrFunc[iNode].funcInfo;
-			break;
-		}
-	}
-	return funcInfo.getHover();
-}
 class HoverProvider {
 	provideHover(document, position, token){
 		UserInput.munchExtract(document, position);
@@ -541,17 +606,17 @@ class CompletionItemProvider {
 			});
 			return arrItems;
 	}
-	getFuncItems = (moduleName, funcName) => {
+	getFuncItems = (/** @type {string} */ moduleName, /** @type {string} */ funcName) => {
 		let moduleHead = hashTable.getModule(moduleName);
-		let arrItems = new Array();
+		let arrItems = [];
 		if(moduleHead == null)
 			return null;
 
 		moduleHead.arrFunc.forEach( (funcNode) => {
 			if(funcNode.funcName.includes(funcName) ) { //skip module name
-					arrItems.push(
-						new vscode.CompletionItem(funcNode.funcName, vscode.CompletionItemKind.Function)
-					);
+				let item = new vscode.CompletionItem(funcNode.funcName, vscode.CompletionItemKind.Function);
+				item.documentation = funcNode.funcInfo.getCompletion();
+				arrItems.push(item);
 			}
 		})
 		return arrItems;
@@ -656,10 +721,12 @@ const addToIndex = (fHandle) => {
 
 }
 const initIndex = () => {
+	hashTable.clear(); //todo: replace with adaptive changing
 	let filesPromise = vscode.workspace.findFiles("*.asm", undefined, INDEX_FILE_CNT);
 	const rejectedFunc = (reason) => {
 		vscode.window.showInformationMessage(reason)
 	};
+
 	const arrayFunc = (arrFiles) => {
 		if(arrFiles.length == 0){
 			vscode.window.showInformationMessage('No source file to index');
