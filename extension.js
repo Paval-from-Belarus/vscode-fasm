@@ -17,69 +17,127 @@ class DescriptionStage {
 
 
 class MarkdownText {
+	
+	static toTitle = (/** @type {string} */ strText) => {
+		return `### ${strText} \n`
+	}
+	static toList = (/** @type {string[]} */ arrValues, mode = true) => {
+		let result = '';
+		let listType = (mode == true) ? '-' : '';
+		arrValues.forEach( (strValue) => {
+			result = result.concat(`${listType} ${strValue} \n`);
+			
+		})
+		return result;
+	}
+	static toBold = (/** @type {string} */ strText) => {
+		return `**${strText}**\n`;
+	}
+	static toItalic = (/** @type {string} */ strText) => {
+		return `*${strText}*\n`;
+	}
+	static toRegular = (/** @type {string} */ strText) => {
+		return `${strText} \n`;
+	}
+	static flip = (/** @type {string[]} */ arrValues) => {
+		let result = '';
+		arrValues.forEach(value => result = result.concat(value));
+		return result;
+	}
 	/**
 	 * 
-	 * @param {string[]} arrString 
+	 * @param {DocsLine[]} arrDocsLine 
 	 * @returns {string}
 	 */
-	static convert(arrString){
-		if(arrString == null || arrString.length == 0)
-			return '';
-		let strText = arrString[0];
-		for(let i = 1; i < arrString.length - 1; i++){
-			strText = strText.concat('\n')
+	static convert(arrDocsLine){
+		let result = '';
+		let arrLines = arrDocsLine.map( (docsLine)=>{
+			let title = MarkdownText.toItalic(docsLine.title);
+			let text = MarkdownText.toRegular(docsLine.text);
+			return title + ` ${Keyword.LONG_DASH} ` + text;
+		});
+		return MarkdownText.toList(arrLines, false);
+	}
+}
+class Keyword {
+	static LONG_DASH = '—';
+	static arrInfoDelim = ['->', '-', '--'];
+	static isGarbageChar =(/** @type {string} */ char) => {
+		return (char == ' ') || (char == '\n') || (char == '\r');
+	}
+	static isDocsInfoDelim = (/** @type {string} */ strValue) => {
+		let bResult = false;
+		Keyword.arrInfoDelim.every( (strDelim) =>{
+			if(strDelim.includes(strValue))
+				bResult = true;
+			return !bResult;
+		})
+		return bResult;
+	}
+}
+class DocsLine {
+	title = '';
+	text = '';
+	/**
+	 * @param {string} [title]
+	 * @param {string} [text]
+	 */
+	constructor (title, text){
+		this.title = title;
+		this.text = text;
+	}
+
+	static resultOf = (/** @type {string} */ rawLine)  =>{
+		let offset = 0;
+		let lineHeader;
+		let stage = 0;
+		for(let i = 0; i < rawLine.length; i++){
+			let symbol = rawLine.charAt(i);
+			if (stage == 0){
+				if(Keyword.isGarbageChar(symbol)  || Keyword.isDocsInfoDelim(symbol)) {
+					lineHeader = rawLine.substring(0, i);
+					stage = 1;
+				}
+			}
+			else 
+				if(!Keyword.isGarbageChar(symbol) && !Keyword.isDocsInfoDelim(symbol)){
+					offset = i;
+					break;
+				}
 		}
-		if(arrString.length != 1){
-			strText = strText.concat('\n', arrString[arrString.length - 1]);
-		}
-		return strText;
+		return new DocsLine(lineHeader, rawLine.substring(offset, rawLine.length));
 	}
 }
 class Functional {
-	static clearString = (strDirty) => {
-		let arrChar = new Array();
+	static clearString = (/** @type {string} */ strDirty) => {
 		strDirty.trim();
-		for(let i = 0; i < strDirty.length; i++){
-			let cSymbol = strDirty.charAt(i);
-			if(cSymbol != '\n' && cSymbol != '\r')
-				arrChar.push(cSymbol);
-		}
-		return arrChar.join('');
+		return strDirty;
 	}
-	static exctractInputInfo = (arrInfo) => {
+	static extractInfo = (/** @type {String[]} */ arrInfo) => {
 		let arrResult = new Array();
 		arrInfo.forEach( (value) => {
-			arrResult.push(Functional.clearString(value));
+			value = Functional.clearString(value);
+			arrResult.push(DocsLine.resultOf(value));
 		})
 		if(arrResult.length == 0)
 			arrResult = ['None'];
 		return arrResult;
+	}
+	static exctractInputInfo = (/** @type {String[]} */ arrInfo) => {
+		return Functional.extractInfo(arrInfo);
 	}
 	static extractOutputInfo = (arrInfo) => {
-		let arrResult = new Array();
-		arrInfo.forEach( (value) => {
-			arrResult.push(Functional.clearString(value));
-		})
-		if(arrResult.length == 0)
-			arrResult = ['None'];
-		return arrResult;
+		return Functional.extractInfo(arrInfo);
 	}
 	static extractAuxInfo = (arrInfo) => {
-		let strResult = '';
-		arrInfo.forEach( (value) =>{
-			let strDummy = Functional.clearString(value);
-			if(strDummy.length != 0){
-				strResult = strResult.concat(strDummy, ' ')
-			}
-		})
-		strResult.trim();
+		return null;
 	}
 	static INPUT_LABEL 	= 'Input';
 	static OUTPUT_LABEL = 'Output';
 	static NOTE_LABEL	= 'Notes';
 	static ASSUME_LABEL	= 'Assume';
 	
-	getStage = (strLabel) => {
+	getStage = (/** @type {string} */ strLabel) => {
 		switch(strLabel){
 			case Functional.INPUT_LABEL:
 				return DescriptionStage.InputPart;
@@ -93,7 +151,7 @@ class Functional {
 				return DescriptionStage.InfoPart;
 		}
 	}
-	savePart = (stage, arrInfo) => {
+	savePart = (/** @type {number} */ stage, /** @type {string[]} */ arrInfo) => {
 		switch(stage){
 			case DescriptionStage.InputPart:
 				this.inputInfo = Functional.exctractInputInfo(arrInfo);
@@ -109,8 +167,10 @@ class Functional {
 				console.log('Unknown stage');
 		}
 	}
+	/**
+	 * @param {string} rawInfo
+	 */
 	constructor (rawInfo){
-
 		let currStage = DescriptionStage.InfoPart;
 		let relOffset = 0;
 		let glOffset  = -1;
@@ -152,14 +212,24 @@ class Functional {
 			this.savePart(currStage, arrInfoPart);	
 	}
 
-	inputInfo = null;
-	outputInfo = null;
-	auxInfo = null;
+	/**
+	 * @type {DocsLine[]}
+	 */
+	inputInfo;
+	/**
+	 * @type {DocsLine[]}
+	 */
+	outputInfo;
+	/**
+	 * @type {DocsLine[]}
+	 */
+	auxInfo;
 	getHover = () => {
-		let strBefore =  ('Input: ' + MarkdownText.convert(this.inputInfo) +
-		'; Output: ' + MarkdownText.convert(this.outputInfo));
-		let strAfter = new vscode.MarkdownString(strBefore);
-		return new vscode.Hover(strAfter);
+		let strValue =  (MarkdownText.toTitle('Input') + MarkdownText.convert(this.inputInfo) +
+						MarkdownText.toTitle('Output') + MarkdownText.convert(this.outputInfo));
+		let strMarkdown = new vscode.MarkdownString(strValue);
+		
+		return new vscode.Hover(strMarkdown);
 	}
 	getCompletion = () => {
 
