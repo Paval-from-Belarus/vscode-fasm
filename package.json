@@ -3,7 +3,7 @@
 	"displayName": "Fasm highlight",
 	"description": "Fasm x86_64 assembly syntax highlighting",
 	"version": "0.0.1",
-	"publisher": "m_rgan",
+	"publisher": "Paval-from-Belarus",
 	"preview": true,
 	"engines": {
 		"vscode": "^1.71.0"
@@ -13,11 +13,13 @@
 		"Programming Languages"
 	],
 	"author": {
-		"name": "Paval-from-Belarus"
+		"name": "Pavel Shlyk"
 	},
 	"main": "./extension.js",
 	"activationEvents": [
-		"onCommand:fasm.initIndex"
+		"onCommand:fasm.initIndex",
+		"onCommand:fasm.compile",
+		"onLanguage:fasm-x86_64"
 	],
 	"contributes": {
 		"themes": [
@@ -48,7 +50,7 @@
 				"fasm.system": {
 					"type": "string",
 					"default": "win",
-					"description": "operation system type (linux or win)"
+					"description": "Operation system type (linux or win)"
 				}
 			}
 		},
@@ -91,9 +93,5 @@
 		"glob": "^8.0.3",
 		"mocha": "^10.1.0",
 		"typescript": "^4.9.3"
-	},
-	"dependencies": {
-		"vscode": "^1.1.37",
-		"webpack": "^5.75.0"
 	}
 }

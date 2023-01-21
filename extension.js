@@ -31,7 +31,7 @@ class SimpleText {
 		arrDocsLine.forEach( (docLine) => {
 			if(docLine.hasTitle())
 				title = `${docLine.title} ${Keyword.LONG_DASH} `
-			strResult = strResult + title + ` ${docLine.text}\n`;
+			strResult = strResult + title + `${docLine.text}\n`;
 		});
 		return strResult;
 	}
@@ -796,7 +796,7 @@ function activate(context) {
 	context.subscriptions.push(disposable);
 	disposable = vscode.commands.registerCommand('fasm.compile',compileProject);
 	context.subscriptions.push(disposable);
-	
+
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider(
             LANG_NAME, new CompletionItemProvider(), '.'));
