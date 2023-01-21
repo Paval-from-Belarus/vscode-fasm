@@ -1,5 +1,4 @@
 # VSCode fasm extension x86-64
-### *v 0.0.1*
 ## What was done?
 - Custom color theme
 - Custom syntax highlighting (thanks amatilda for most of work)
