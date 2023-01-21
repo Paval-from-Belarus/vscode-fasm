@@ -13,26 +13,42 @@
 		"Programming Languages"
 	],
 	"author": {
-		"name": "Pavel-from-Belarus"
+		"name": "Paval-from-Belarus"
 	},
 	"main": "./extension.js",
 	"activationEvents": [
 		"onCommand:fasm.initIndex"
 	],
 	"contributes": {
+		"themes": [
+			{
+				"label": "Fasm Dark",
+				"uiTheme": "vs-dark",
+				"path": "./themes/Fasm Dark-color-theme.json"
+			}
+		],
 		"commands": [
 			{
 				"command": "fasm.initIndex",
-				"title": "FASM: init index"
+				"title": "Flat assembly: Init index"
+			},
+			{
+				"command": "fasm.compile",
+				"title": "Flat assembly: Compile"
 			}
 		],
 		"configuration": {
-			"title": "FASM",
+			"title": "Flat assembly",
 			"properties": {
-				"fasm.compiller": {
+				"fasm.compiler": {
 					"type": "string",
 					"default": false,
-					"description": "flat assemler compiller"
+					"description": "Absolute path of flat assemler compiler (exactly bash script)"
+				},
+				"fasm.system": {
+					"type": "string",
+					"default": "win",
+					"description": "operation system type (linux or win)"
 				}
 			}
 		},

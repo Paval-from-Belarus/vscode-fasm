@@ -13,7 +13,11 @@ class DescriptionStage {
 	static NotesPart = 3;
 	static AssumePart = 4;
 }
-
+class OperationSystem {
+	static Win = 0;
+	static Linux = 1;
+	static Unknown = 2;
+}
 
 class SimpleText {
 		/**
@@ -746,10 +750,42 @@ const initIndex = () => {
 
 
 };
+const compileProject = () => {
+	if(osMode == OperationSystem.Unknown){
+		vscode.window.showErrorMessage("Unknown operation system");
+		return;
+	}
+	let strCommand;
+	let terminal;
+	if(vscode.window.terminals.length == 0)
+		terminal = vscode.window.createTerminal(`fasm terminal`);
+	else
+		terminal = vscode.window.terminals.at(0);
+	switch(osMode){
+		case OperationSystem.Win:
+			strCommand = `start ${CompillerPath}`;
+			break;
+		case OperationSystem.Linux:
+			strCommand = `${CompillerPath}`
+			break;
+	}
+	terminal.sendText(strCommand);
+	
+}
+let osMode = OperationSystem.Unknown;
 const initGlobals = () => {
 	WorkDirectoryPath = vscode.workspace.workspaceFolders[0].uri.path;
-	CompillerPath = vscode.workspace.getConfiguration(CONFIG_HEADER).get('compiller');
+	CompillerPath = vscode.workspace.getConfiguration(CONFIG_HEADER).get('compiler');
+	switch(vscode.workspace.getConfiguration(CONFIG_HEADER).get('system')){
+		case "win":
+			osMode = OperationSystem.Win;
+			break;
+		case "linux":
+			osMode = OperationSystem.Linux;
+			break;
+	}
 }
+
 
 /**
  * @param {vscode.ExtensionContext} context
@@ -758,10 +794,12 @@ function activate(context) {
 	initGlobals();
 	let disposable = vscode.commands.registerCommand('fasm.initIndex', initIndex);	
 	context.subscriptions.push(disposable);
+	disposable = vscode.commands.registerCommand('fasm.compile',compileProject);
+	context.subscriptions.push(disposable);
+	
     context.subscriptions.push(
         vscode.languages.registerCompletionItemProvider(
             LANG_NAME, new CompletionItemProvider(), '.'));
-
 	vscode.languages.registerHoverProvider(LANG_NAME, new HoverProvider());
 }
 
