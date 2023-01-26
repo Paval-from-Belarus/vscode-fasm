@@ -1,4 +1,4 @@
-const { stringify } = require('querystring');
+const system = require('node:os');
 const vscode = require('vscode');
 
 const LANG_NAME = 'fasm-x86_64';
@@ -700,7 +700,7 @@ const getFirstName = (fHandle, nLine) => {
 
 //if error return -1
 //else return 0;
-const addToIndex = (fHandle) => {
+const addToIndex = (/** @type {vscode.TextDocument} */ fHandle) => {
 	let currLine = 0;
 	let lineCnt = fHandle.lineCount;
 
@@ -724,9 +724,80 @@ const addToIndex = (fHandle) => {
 
 
 }
+
+class IndexMemory {
+	arrExtType = ["asm", "inc", "fasm"];	
+	maxFileCnt = INDEX_FILE_CNT;
+	ignoreFiles = [];
+	addSourceExtension = (/** @type {string} */ strExtType) => {
+		this.arrExtType.push(strExtType);
+	}
+	getSourceExtension = () => {
+		return this.arrExtType;
+	}
+	getFileCnt = () => {
+		return this.maxFileCnt;
+	}
+	setIgnoreFiles = (arrFiles = []) => {
+		if(arrFiles.length != 0){
+			this.ignoreFiles = arrFiles;
+			return;
+		}
+		let filePromise = vscode.workspace.findFiles(IndexMemory.getIgnoreFileName(), undefined, 1);
+		filePromise.then( arrFiles => {
+			if(arrFiles.length == 0)
+				return this.ignoreFiles = [];
+			
+			let fHandle = vscode.workspace.openTextDocument(arrFiles[0]);
+			fHandle.then(document => {
+				this.ignoreFiles = this.extractFileNames(document);
+			})
+		});
+	}
+	getIgnoreFiles = () => {
+		if(this.ignoreFiles.length == 0)
+			this.setIgnoreFiles();
+		return this.ignoreFiles;
+	}
+	extractFileNames = (/** @type {vscode.TextDocument} */ fHandle) => {
+		let lineCnt = fHandle.lineCount;
+		let iLine = 0;
+		let buffString = '';
+		let arrResult = new Array();
+		while(iLine < lineCnt) {
+			buffString = fHandle.lineAt(iLine).text;
+			buffString.trim();
+			arrResult.push(buffString);
+			iLine += 1;
+		}
+		return arrResult;
+	}
+	static IGNORE_FILE_NAME = ".fasmignore";
+	static convertTemplate = (/** @type {string[]} */ arrExts, /** @type {string} */ strHeader = "**/*.") => {
+		if(arrExts.length == 0)
+			return (strHeader.length == 0) ? null : strHeader + "*";
+		
+		let result = strHeader + '{';
+		arrExts.forEach( extValue => {
+			result = result + extValue + ','
+		})
+		result = result.substring(0, result.length - 1) + '}';
+		return result;
+	}
+	static getIgnoreFileName = () => {
+		return IndexMemory.IGNORE_FILE_NAME;
+	}
+}
+let indexMemory = new IndexMemory();
+
 const initIndex = () => {
 	hashTable.clear(); //todo: replace with adaptive changing
-	let filesPromise = vscode.workspace.findFiles("*.asm", undefined, INDEX_FILE_CNT);
+//	indexMemory.setIgnoreFiles();
+	let filesPromise = vscode.workspace.findFiles(
+			 IndexMemory.convertTemplate(indexMemory.getSourceExtension()),
+			 IndexMemory.convertTemplate(indexMemory.getIgnoreFiles(), ''),
+			 indexMemory.getFileCnt());
+
 	const rejectedFunc = (reason) => {
 		vscode.window.showInformationMessage(reason)
 	};
@@ -735,7 +806,7 @@ const initIndex = () => {
 		if(arrFiles.length == 0){
 			vscode.window.showInformationMessage('No source file to index');
 		}
-		arrFiles.forEach((fileUri) => {
+		arrFiles.forEach((/** @type {vscode.Uri} */ fileUri) => {
 			let fHandle = vscode.workspace.openTextDocument(fileUri);
 			fHandle.then((file) => {
 				saveSourceFile(file.fileName);
@@ -774,17 +845,23 @@ const compileProject = () => {
 }
 let osMode = OperationSystem.Unknown;
 const initGlobals = () => {
+
 	WorkDirectoryPath = vscode.workspace.workspaceFolders[0].uri.path;
 	CompillerPath = vscode.workspace.getConfiguration(CONFIG_HEADER).get('compiler');
-	switch(vscode.workspace.getConfiguration(CONFIG_HEADER).get('system')){
-		case "win":
+	vscode.workspace.getConfiguration(CONFIG_HEADER).get("extensions").forEach( (/** @type {string} */ extValue) => {
+		indexMemory.addSourceExtension(extValue);
+	});
+	indexMemory.setIgnoreFiles();
+	switch(system.type()){
+		case "Windows_NT":
 			osMode = OperationSystem.Win;
 			break;
-		case "linux":
+		case "Linux":
 			osMode = OperationSystem.Linux;
 			break;
 	}
 }
+
 
 
 /**

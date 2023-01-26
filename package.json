@@ -50,10 +50,10 @@
 					"default": false,
 					"description": "Absolute path of flat assemler compiler (exactly bash script)"
 				},
-				"fasm.system": {
-					"type": "string",
-					"default": "win",
-					"description": "Operation system type (linux or win)"
+				"fasm.extensions": {
+					"type": "array",
+					"default": [],
+					"description": "File extensions for indexation"
 				}
 			}
 		},
