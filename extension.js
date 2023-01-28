@@ -728,7 +728,9 @@ const addToIndex = (/** @type {vscode.TextDocument} */ fHandle) => {
 class IndexMemory {
 	arrExtType = ["asm", "inc", "fasm"];	
 	maxFileCnt = INDEX_FILE_CNT;
-	ignoreFiles = [];
+	ignoreFiles = [''];
+	errorHandle = null;
+	indexHandle = null; //function that invoked by index construction (vscode.TextDocument)
 	addSourceExtension = (/** @type {string} */ strExtType) => {
 		this.arrExtType.push(strExtType);
 	}
@@ -738,36 +740,59 @@ class IndexMemory {
 	getFileCnt = () => {
 		return this.maxFileCnt;
 	}
-	setIgnoreFiles = (arrFiles = []) => {
-		if(arrFiles.length != 0){
-			this.ignoreFiles = arrFiles;
-			return;
-		}
-		let filePromise = vscode.workspace.findFiles(IndexMemory.getIgnoreFileName(), undefined, 1);
-		filePromise.then( arrFiles => {
+	init = () => {
+		let filesPromise = vscode.workspace.findFiles(
+			IndexMemory.convertTemplate(this.getSourceExtension()),
+			IndexMemory.convertTemplate(this.getIgnoreFiles(), ''),
+			this.getFileCnt());
+		
+		filesPromise.then( (arrFiles) => {
 			if(arrFiles.length == 0)
-				return this.ignoreFiles = [];
-			
-			let fHandle = vscode.workspace.openTextDocument(arrFiles[0]);
-			fHandle.then(document => {
-				this.ignoreFiles = this.extractFileNames(document);
+				this.errorHandle();
+			arrFiles.forEach((/** @type {vscode.Uri} */ fileUri) => {
+				let fHandle = vscode.workspace.openTextDocument(fileUri);
+				fHandle.then((file) => this.indexHandle(file));
+			});
+		}, this.errorHandle);
+	}
+	//or by ignore file, or by array
+	setIgnoreFiles = (/** @type {string[]}*/ sourceFiles = []) => {
+		this.ignoreFiles = sourceFiles;
+		if(sourceFiles.length != 0){
+			return new Promise((resolve) => {
+				resolve();
 			})
-		});
+		}
+
+		let filePromise = vscode.workspace.findFiles(IndexMemory.getIgnoreSourceName(), undefined, 1);
+		let promiseResult = new Promise((resolve, reject) => {
+			filePromise.then( (arrFiles) => {
+				if(arrFiles.length == 0)
+					reject();
+				else {
+					let fHandle = vscode.workspace.openTextDocument(arrFiles[0]);
+					fHandle.then( (document) => {
+						this.ignoreFiles = this.extractFileNames(document);
+						resolve();
+					}, reject)
+				}
+			});		
+		})
+		return promiseResult;
 	}
 	getIgnoreFiles = () => {
-		if(this.ignoreFiles.length == 0)
-			this.setIgnoreFiles();
 		return this.ignoreFiles;
 	}
 	extractFileNames = (/** @type {vscode.TextDocument} */ fHandle) => {
 		let lineCnt = fHandle.lineCount;
 		let iLine = 0;
 		let buffString = '';
-		let arrResult = new Array();
+		let arrResult = [''];
 		while(iLine < lineCnt) {
 			buffString = fHandle.lineAt(iLine).text;
 			buffString.trim();
-			arrResult.push(buffString);
+			if(buffString.length != 0)
+				arrResult.push(buffString);
 			iLine += 1;
 		}
 		return arrResult;
@@ -784,41 +809,27 @@ class IndexMemory {
 		result = result.substring(0, result.length - 1) + '}';
 		return result;
 	}
-	static getIgnoreFileName = () => {
+	static getIgnoreSourceName = () => {
 		return IndexMemory.IGNORE_FILE_NAME;
 	}
 }
-let indexMemory = new IndexMemory();
-
+var indexMemory = new IndexMemory();
+/**
+ * @param {string} strMessage
+ */
+function printErrorMessage(strMessage) {
+	vscode.window.showInformationMessage(strMessage);
+}
 const initIndex = () => {
 	hashTable.clear(); //todo: replace with adaptive changing
-//	indexMemory.setIgnoreFiles();
-	let filesPromise = vscode.workspace.findFiles(
-			 IndexMemory.convertTemplate(indexMemory.getSourceExtension()),
-			 IndexMemory.convertTemplate(indexMemory.getIgnoreFiles(), ''),
-			 indexMemory.getFileCnt());
-
-	const rejectedFunc = (reason) => {
-		vscode.window.showInformationMessage(reason)
-	};
-
-	const arrayFunc = (arrFiles) => {
-		if(arrFiles.length == 0){
-			vscode.window.showInformationMessage('No source file to index');
-		}
-		arrFiles.forEach((/** @type {vscode.Uri} */ fileUri) => {
-			let fHandle = vscode.workspace.openTextDocument(fileUri);
-			fHandle.then((file) => {
-				saveSourceFile(file.fileName);
-				addToIndex(file);
-			})
-
-		});
+	indexMemory.errorHandle = () => {
+		printErrorMessage('Error during index construction')
 	}
-	filesPromise.then(arrayFunc, rejectedFunc);
-
-	
-
+	indexMemory.indexHandle = (/** @type {vscode.TextDocument}*/ document) => {
+		saveSourceFile(document.fileName);
+		addToIndex(document);
+	}
+	indexMemory.setIgnoreFiles().then(indexMemory.init, indexMemory.errorHandle);
 
 };
 const compileProject = () => {
@@ -843,7 +854,7 @@ const compileProject = () => {
 	terminal.sendText(strCommand);
 	
 }
-let osMode = OperationSystem.Unknown;
+var osMode = OperationSystem.Unknown;
 const initGlobals = () => {
 
 	WorkDirectoryPath = vscode.workspace.workspaceFolders[0].uri.path;
@@ -851,7 +862,6 @@ const initGlobals = () => {
 	vscode.workspace.getConfiguration(CONFIG_HEADER).get("extensions").forEach( (/** @type {string} */ extValue) => {
 		indexMemory.addSourceExtension(extValue);
 	});
-	indexMemory.setIgnoreFiles();
 	switch(system.type()){
 		case "Windows_NT":
 			osMode = OperationSystem.Win;
