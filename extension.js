@@ -1,4 +1,5 @@
 const { ConsoleReporter } = require('@vscode/test-electron');
+const { interfaces } = require('mocha');
 const system = require('node:os');
 const { collapseTextChangeRangesAcrossMultipleVersions } = require('typescript');
 const vscode = require('vscode');
@@ -156,7 +157,24 @@ class DocsLine {
 	}
 	
 }
-class Functional {
+const extractFileName = (/** @type {string} */sFullPath) => {
+	let result = sFullPath.substring(WorkDirectoryPath.length + 1);
+	return result;
+}
+class NodeInfo {
+	getHover = () => {
+		return new vscode.Hover('');
+	}
+	getCompletion = () => {
+		return this.sourceFile;
+	}
+	sourceFile = NodeInfo.originFileName;
+	static originFileName = '';
+	static setGlobalOrigin = (sFullPath) => {
+		NodeInfo.originFileName = extractFileName(sFullPath);
+	}
+}
+class Functional extends NodeInfo{
 	static clearString = (/** @type {string} */ strDirty) => {
 		strDirty = strDirty.trim();
 		return strDirty;
@@ -173,8 +191,10 @@ class Functional {
 				currLine = lastLine;
 			}
 			else {
-				lastLine = currLine;
-				arrResult.push(currLine);
+				if(currLine.text.length != 0){
+					lastLine = currLine;
+					arrResult.push(currLine);
+				}
 			}
 		})
 		if(arrResult.length == 0)
@@ -229,6 +249,7 @@ class Functional {
 	 * @param {string} rawInfo
 	 */
 	constructor (rawInfo){
+		super();
 		let currStage = DescriptionStage.InfoPart;
 		let relOffset = 0;
 		let glOffset  = -1;
@@ -304,7 +325,7 @@ class Functional {
 				strResult += arrTitle[index] + '\n' + SimpleText.convert(arrLines);	
 			}
 		});
-
+		strResult += '\n' + this.sourceFile;
 
 		return strResult;
 	}
@@ -312,7 +333,7 @@ class Functional {
 const DUMYY_MODULE_NAME = "@@Dummy_Module@@";
 class FuncModule {
 	/**
-	 * @type {FuncHashNode[]}
+	 * @type {HashNode[]}
 	 */
 	arrFunc = [];
 	/**
@@ -323,7 +344,7 @@ class FuncModule {
 	 * @type {FuncModule}
 	 */
 	nextModule = null; //linked list of FuncModule
-	type 
+	type = new HashModuleType();
     /**
      * 
      * @param {string} moduleName 
@@ -333,7 +354,7 @@ class FuncModule {
     }
     /**
      * 
-     * @param {FuncHashNode} funcNode 
+     * @param {HashNode} funcNode 
      */
     add = (funcNode) =>{
         if(!this.contains(funcNode.nodeName))
@@ -358,7 +379,7 @@ class FuncModule {
 	/**
 	 * 
 	 * @param {string} funcName 
-	 * @returns {FuncHashNode}
+	 * @returns {HashNode}
 	 */
 	get = (funcName) => {
 		let iFunc = 0;
@@ -369,6 +390,9 @@ class FuncModule {
 		}
 		return nodeResult;
 	}
+	setModuleType = (/** @type {HashModuleType} */ type) => {
+		this.type = type;
+	}
 
 }
 class HashNode {
@@ -378,6 +402,8 @@ class HashNode {
 	setHashKey = (/** @type {number} */ hashKey) =>{
 		this.hashKey = hashKey;
 	}
+	
+	nodeInfo = new NodeInfo();
 	nodeName = '';
 	hasModule = true;
 	/**
@@ -388,14 +414,15 @@ class HashNode {
 	 * @type {number}
 	 */
     hashKey;
-	static valueOf = (/** @type {string} */ moduleName, /** @type {string} */ nodeName, nodeType) =>{
+
+	static valueOf = (/** @type {string} */ moduleName, /** @type {string} */ nodeName) =>{
 		let result = new HashNode();
-		result.nodeName = moduleName + nodeName;
+		result.nodeName = moduleName + '.' + nodeName;
 		return result;
 	}
-	static arrayOf = (/** @type {string} */ moduleName, /** @type {string[]} */ nodeNames, nodeType) =>{
+	static arrayOf = (/** @type {string} */ moduleName, /** @type {string[]} */ nodeNames) =>{
 		let result = [];
-		nodeNames.forEach(name => result.push(HashNode.valueOf(moduleName, name, nodeType)));
+		nodeNames.forEach(name => result.push(HashNode.valueOf(moduleName, name)));
 		return result;
 	}
 }
@@ -413,10 +440,8 @@ class FuncHashNode extends HashNode{
         }
         let nameLength = funcName.charAt(funcName.length - 1) == ':' ? funcName.length - 1 : funcName.length;
         this.nodeName = funcName.substring(0, nameLength);
-        this.funcInfo = funcInfo;
+        this.nodeInfo = funcInfo;
     }
-	funcInfo;
-
 }
 
 class HashIndex {
@@ -443,17 +468,18 @@ class HashIndex {
      * 
      * @param {HashNode} hashNode 
      */
-    add = (hashNode) => {
+    add = (hashNode, /** @type {HashModuleType} */ moduleType) => {
 		let moduleHead;
         let arrString = hashNode.nodeName.split('.', 2); //module and funcName
         let moduleName = arrString[0];
         hashNode.nodeName = arrString[1];
         hashNode.hashKey = this.getHashCode(moduleName);
 		moduleHead = this.addModule(moduleName, hashNode.hasModule);
+		moduleHead.setModuleType(moduleType);
         moduleHead.add(hashNode);
     }
-	addAll = (/** @type {HashNode[]} */ nodes) => {
-		nodes.forEach(node => this.add(node));
+	addAll = (/** @type {HashNode[]} */ nodes, /** @type {HashModuleType} */ moduleType) => {
+		nodes.forEach(node => this.add(node, moduleType));
 	}
 	//add module or return existing
 	addModule = (/** @type {string} */ moduleName, isIndexed = true) => {
@@ -532,8 +558,8 @@ class HashIndex {
 }
 
 
-let CompillerPath;
-let WorkDirectoryPath;
+var CompillerPath;
+var WorkDirectoryPath;
 
 const SEARCH_EXT = ['.fasm', '.asm', '.inc'];
 const IGNORE_FILES = [];
@@ -613,31 +639,51 @@ class HoverProvider {
 		let funcNode = hashTable.getModule(moduleName).get(funcName);
 		if(funcNode == null)
 			return null;
-		return funcNode.funcInfo.getHover();
+		return funcNode.nodeInfo.getHover();
 	}
 }
 class CompletionItemProvider {
-
+	static getModuleKind = (moduleType) => {
+		switch(moduleType){
+			case HashModuleType.Class:
+				return vscode.CompletionItemKind.Class;
+			case HashModuleType.Struct:
+				return vscode.CompletionItemKind.Struct;
+		}
+	}
+	static getNodeKind = (nodeType) => {
+		switch(nodeType){
+			case HashNodeType.Function:
+				return vscode.CompletionItemKind.Method;
+			case HashNodeType.Field:
+				return vscode.CompletionItemKind.Field;
+		}
+	}
 	getModuleItems = (moduleName) => {
 			let arrModules = hashTable.getModules(moduleName);
 			let arrItems = new Array();
+			let itemKind;
 			arrModules.forEach( (moduleHead) => {
+				itemKind = CompletionItemProvider.getModuleKind(moduleHead.type);
 				arrItems.push(
-					new vscode.CompletionItem(moduleHead.selfName, vscode.CompletionItemKind.Class)
-				)
+					new vscode.CompletionItem(moduleHead.selfName, itemKind) )
 			});
 			return arrItems;
 	}
 	getFuncItems = (/** @type {string} */ moduleName, /** @type {string} */ funcName) => {
 		let moduleHead = hashTable.getModule(moduleName);
 		let arrItems = [];
+		let itemKind;
 		if(moduleHead == null)
 			return null;
-
+		itemKind = CompletionItemProvider.getNodeKind(
+			HashModuleType.convertToNode(moduleHead.type)
+		)
 		moduleHead.arrFunc.forEach( (funcNode) => {
 			if(funcNode.nodeName.includes(funcName) ) { //skip module name
-				let item = new vscode.CompletionItem(funcNode.nodeName, vscode.CompletionItemKind.Function);
-				item.documentation = funcNode.funcInfo.getCompletion();
+
+				let item = new vscode.CompletionItem(funcNode.nodeName, itemKind);
+				item.documentation = funcNode.nodeInfo.getCompletion();
 				arrItems.push(item);
 			}
 		})
@@ -751,6 +797,13 @@ const STR_DECLARE_START = ';@Declare';
 const hasExtSyntax = (strLine) => {
 	return strLine.includes(STR_DECLARE_START);
 }
+const extractFirstKeyword = (/** @type {string} */ strLine) => {
+	strLine = strLine.trim();
+	let auxBuffer = strLine.match(/[a-zA-Z_][a-zA-Z_0-9]*;?/)
+	if(auxBuffer.length > 0 && auxBuffer.at(auxBuffer.length - 1) == ';')
+		auxBuffer.length -= 1;
+	return auxBuffer[0];
+}
 const getExtBlock = (/** @type {vscode.TextDocument} */ fHandle, /** @type {number} */ nLine, /** @type {number} */ limitLine) => {
 	let result = null;
 	let tempArray = [];
@@ -758,17 +811,19 @@ const getExtBlock = (/** @type {vscode.TextDocument} */ fHandle, /** @type {numb
 	let nextClosed = true;
 	let auxBuffer = [''];
 	nLine += 2;
-	if(!buffString.includes('struct'))
+	if(!buffString.includes('struc'))
 		return result;
 	auxBuffer = buffString.match(/[a-zA-Z]+/g);
 	if(auxBuffer.length == 1)
 		return result;
-	tempArray.push(auxBuffer[1].trim());
+	auxBuffer[0] = extractFirstKeyword(auxBuffer[1]);
+	tempArray.push(auxBuffer[0]);
+
 	while(nLine < limitLine && nextClosed){
 		buffString = fHandle.lineAt(nLine++).text;
-		auxBuffer = buffString.match('\.[a-zA-Z]+ ');
+		auxBuffer = buffString.match("\\.[a-zA-Z_0-9]+");
 		if(auxBuffer != null)
-			tempArray.push(auxBuffer[0].trim());
+			tempArray.push(extractFirstKeyword(auxBuffer[0]));
 		nextClosed = buffString.match('[ ]*\}') == null;
 	}
 	if(tempArray.length > 0)
@@ -809,7 +864,7 @@ const getFirstName = (fHandle, nLine) => {
 const addToIndex = (/** @type {vscode.TextDocument} */ fHandle) => {
 	let currLine = 0;
 	let lineCnt = fHandle.lineCount;
-
+	NodeInfo.setGlobalOrigin(fHandle.fileName);
 	while(currLine < lineCnt){
 		let buffDocs = null;
 		while(buffDocs == null && currLine < lineCnt){
@@ -819,24 +874,22 @@ const addToIndex = (/** @type {vscode.TextDocument} */ fHandle) => {
 		if(buffDocs == null || lineCnt < buffDocs.nextLine)
 			break;
 		currLine = buffDocs.nextLine;
+		let moduleType = DocsBlockType.convertToModule(buffDocs.type);
 		if(buffDocs.type == DocsBlockType.Functional){
 			let funcName = getFirstName(fHandle, currLine++);
 			if(funcName.charAt(0) != '.'){ //if not internal label
 				let funcNode = new FuncHashNode(funcName, 
 												new Functional(buffDocs.block));
 				funcNode.setSourceId(getLastSourceIndex());
-				hashTable.add(funcNode);
+				hashTable.add(funcNode, moduleType);
 			}
 		}
 		else {
 			let moduleName = buffDocs.auxInfo[0];
-			let moduleType = DocsBlockType.convertToModule(buffDocs.type)
 			hashTable.addAll(
 				HashNode.arrayOf(moduleName, 
-								buffDocs.auxInfo.slice(1, buffDocs.auxInfo.length),
-								moduleType
-								)
-			)
+						buffDocs.auxInfo.slice(1, buffDocs.auxInfo.length)),
+						moduleType)
 		}
 			
 		

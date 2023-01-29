@@ -342,11 +342,11 @@
 					"patterns":[
 						{
 							"name": "storage.type",
-							"match": "db|rb|dw|du|rw|dd|rd|dp|df|rp|rf|dq|rq|dt|rt"
+							"match": "((byte|BYTE)|(word|WORD)|(dword|DWORD)|(fword|FWORD)|(pword|PWORD)|(qword|QWORD)|(tbyte|TBYTE)|(tword|TWORD)|(dqword|DQWORD)|(xword|XWORD)|(qqword|QQWORD)|(yword|YWORD)|(dqqword|DQQWORD)|(zword|ZWORD))[ \n]"
 						},
 						{
 							"name": "storage.type",
-							"match": "(byte|BYTE)|(word|WORD)|(dword|DWORD)|(fword|FWORD)|(pword|PWORD)|(qword|QWORD)|(tbyte|TBYTE)|(tword|TWORD)|(dqword|DQWORD)|(xword|XWORD)|(qqword|QQWORD)|(yword|YWORD)|(dqqword|DQQWORD)|(zword|ZWORD)"
+							"match": "(db|rb|dw|du|rw|dd|rd|dp|df|rp|rf|dq|rq|dt|rt)[ \n]"
 						}
 					]
 				}
@@ -361,7 +361,7 @@
 					"comment": "variable in hungrian-system style"
 				},
 				{
-					"match": "[_@a-zA-Z][_@a-zA-Z]*",
+					"match": "[_@a-zA-Z][_@a-zA-Z0-9]*",
 					"name": "entity.other.text.default"
 				}
 			]
