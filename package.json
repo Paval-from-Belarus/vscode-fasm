@@ -35,11 +35,11 @@
 		"commands": [
 			{
 				"command": "fasm.initIndex",
-				"title": "Flat assembly: Init index"
+				"title": "Flat assembly: Build Index"
 			},
 			{
 				"command": "fasm.compile",
-				"title": "Flat assembly: Compile"
+				"title": "Flat assembly: Run script"
 			}
 		],
 		"configuration": {
@@ -53,7 +53,7 @@
 				"fasm.extensions": {
 					"type": "array",
 					"default": [],
-					"description": "File extensions for indexation"
+					"description": "Files' extensions for indexation"
 				}
 			}
 		},

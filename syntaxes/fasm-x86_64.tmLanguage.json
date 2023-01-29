@@ -43,10 +43,6 @@
 					}],
 					"patterns":[
 						{
-							"match": "Input:",
-							"name": "markup.other.docs"
-						},
-						{
 							"match": "Output:",
 							"name": "markup.other.docs"
 						},
@@ -64,7 +60,26 @@
 						}
 					]
 				},
-
+				{
+					"begin":";@Declare(\\w*)",
+					"end": "\\}",
+					"beginCaptures": [{
+						"name": "markup.other.docs"
+					}],
+					"endCaptures": [{
+						"name": "markup.other.docs"
+					}],
+					"patterns":[
+						{
+							"match": "\\{",
+							"name": "markup.other.docs"
+						},
+						{
+							"match":".",
+							"name": "markup.other.declaration.type"
+						}
+					]
+				},
 				{
 					"name": "invalid.illegal.todo",
 					"match": "todo"
@@ -311,11 +326,11 @@
 			"patterns":[
 				{
 					"name": "keyword.control",
-					"match": "(\\[|\\]|,|:|\\+|-|\\*|/)|\\.|=",
+					"match": "(\\[|\\]|,|:|\\+|-|\\*|/)|\\.|=|<>",
 					"comment": "Simbols"
 				},
 				{
-					"match": "macro|repeat|if|end if|end repeat|include|format|org|entry|struct|@@|@B|@F|\\(|\\)",
+					"match": "macro|repeat|if|end if|end repeat|include|format|org|entry|struct|@@|@B|@F|\\(|\\)|\\?",
 					"name": "keyword.control.compiller"
 				},
 				{

@@ -1,4 +1,6 @@
+const { ConsoleReporter } = require('@vscode/test-electron');
 const system = require('node:os');
+const { collapseTextChangeRangesAcrossMultipleVersions } = require('typescript');
 const vscode = require('vscode');
 
 const LANG_NAME = 'fasm-x86_64';
@@ -321,6 +323,7 @@ class FuncModule {
 	 * @type {FuncModule}
 	 */
 	nextModule = null; //linked list of FuncModule
+	type 
     /**
      * 
      * @param {string} moduleName 
@@ -333,7 +336,7 @@ class FuncModule {
      * @param {FuncHashNode} funcNode 
      */
     add = (funcNode) =>{
-        if(!this.contains(funcNode.funcName))
+        if(!this.contains(funcNode.nodeName))
             this.arrFunc.push(funcNode);
     }
     /**
@@ -344,11 +347,12 @@ class FuncModule {
 	contains = (funcName) => {
 		let bResult = false;
 		for(let iFunc = 0; iFunc < this.arrFunc.length; iFunc++){
-			bResult = this.arrFunc.at(iFunc).funcName == funcName;
+			bResult = this.arrFunc.at(iFunc).nodeName == funcName;
 			if(bResult)
 				break;
 		}
 		return bResult;
+
 	}
 
 	/**
@@ -360,45 +364,22 @@ class FuncModule {
 		let iFunc = 0;
 		let nodeResult = null;
 		while(nodeResult == null && iFunc < this.arrFunc.length){
-			nodeResult = this.arrFunc[iFunc].funcName == funcName ? this.arrFunc[iFunc] : null;
+			nodeResult = this.arrFunc[iFunc].nodeName == funcName ? this.arrFunc[iFunc] : null;
 			iFunc++;
 		}
 		return nodeResult;
 	}
 
 }
-class FuncHashNode {
-    /**
-     * 
-     * @param {string} funcName 
-     * @param {Functional} funcInfo 
-     */
-    constructor(funcName, funcInfo) {
-        this.hasModule = (funcName.indexOf('.') > - 1);
-        if(!this.hasModule){
-            funcName = DUMYY_MODULE_NAME + '.' + funcName;
-        }
-        let nameLength = funcName.charAt(funcName.length - 1) == ':' ? funcName.length - 1 : funcName.length;
-        this.funcName =  funcName.substring(0, nameLength);
-        this.funcInfo = funcInfo;
-    }
-    /**
-     * 
-     * @param {number} sourceId 
-     */
-    setSourceId = (sourceId) => {
-        this.sourceId = sourceId;
-    }
-    /**
-     * 
-     * @param {number} hashKey 
-     */
-    setHashKey = (hashKey) =>{
-        this.hashKey = hashKey;
-    }
-	funcName;
-	funcInfo;
-	hasModule;
+class HashNode {
+	setSourceId = (/** @type {number} */ sourceId) => {
+		this.sourceId = sourceId;
+	}
+	setHashKey = (/** @type {number} */ hashKey) =>{
+		this.hashKey = hashKey;
+	}
+	nodeName = '';
+	hasModule = true;
 	/**
 	 * @type {number}
 	 */
@@ -407,6 +388,35 @@ class FuncHashNode {
 	 * @type {number}
 	 */
     hashKey;
+	static valueOf = (/** @type {string} */ moduleName, /** @type {string} */ nodeName, nodeType) =>{
+		let result = new HashNode();
+		result.nodeName = moduleName + nodeName;
+		return result;
+	}
+	static arrayOf = (/** @type {string} */ moduleName, /** @type {string[]} */ nodeNames, nodeType) =>{
+		let result = [];
+		nodeNames.forEach(name => result.push(HashNode.valueOf(moduleName, name, nodeType)));
+		return result;
+	}
+}
+class FuncHashNode extends HashNode{
+    /**
+     * 
+     * @param {string} funcName 
+     * @param {Functional} funcInfo 
+     */
+    constructor(funcName, funcInfo) {
+		super();
+        this.hasModule = (funcName.indexOf('.') > - 1);
+        if(!this.hasModule){
+            funcName = DUMYY_MODULE_NAME + '.' + funcName;
+        }
+        let nameLength = funcName.charAt(funcName.length - 1) == ':' ? funcName.length - 1 : funcName.length;
+        this.nodeName = funcName.substring(0, nameLength);
+        this.funcInfo = funcInfo;
+    }
+	funcInfo;
+
 }
 
 class HashIndex {
@@ -431,34 +441,42 @@ class HashIndex {
     }
     /**
      * 
-     * @param {FuncHashNode} funcNode 
+     * @param {HashNode} hashNode 
      */
-    add = (funcNode) => {
+    add = (hashNode) => {
 		let moduleHead;
-        let arrString = funcNode.funcName.split('.', 2); //module and funcName
+        let arrString = hashNode.nodeName.split('.', 2); //module and funcName
         let moduleName = arrString[0];
-        funcNode.funcName = arrString[1];
-        funcNode.hashKey = this.getHashCode(moduleName);
-		moduleHead = this.table[funcNode.hashKey];
-        if(moduleHead == null){
-            moduleHead = new FuncModule(moduleName);
-            this.table[funcNode.hashKey] = moduleHead;
-            if(funcNode.hasModule)
-                this.saveModule(moduleHead);
-        }
-        else {
-            while(moduleHead.nextModule != null && moduleHead.selfName != moduleName)
-                moduleHead = moduleHead.nextModule;
-            if(moduleHead.selfName != moduleName){
-                moduleHead.nextModule = new FuncModule(moduleName);
-                moduleHead = moduleHead.nextModule;
-                if(funcNode.hasModule)
-                    this.saveModule(moduleHead); //save moduleHead in Index array
-            }
-        }
-        moduleHead.add(funcNode);
-    
+        hashNode.nodeName = arrString[1];
+        hashNode.hashKey = this.getHashCode(moduleName);
+		moduleHead = this.addModule(moduleName, hashNode.hasModule);
+        moduleHead.add(hashNode);
     }
+	addAll = (/** @type {HashNode[]} */ nodes) => {
+		nodes.forEach(node => this.add(node));
+	}
+	//add module or return existing
+	addModule = (/** @type {string} */ moduleName, isIndexed = true) => {
+		let hashKey = this.getHashCode(moduleName);
+		let moduleHead = this.table[hashKey];
+		let hasNext = moduleHead != null && moduleHead.nextModule != null;
+		let wasAdded = false;
+		while(hasNext && moduleHead.selfName != moduleHead){
+			moduleHead = moduleHead.nextModule;
+			hasNext = moduleHead.nextModule != null;
+		}
+		if(moduleHead == null){
+			moduleHead = (this.table[hashKey] = new FuncModule(moduleName));
+			wasAdded = true;
+		}
+		if(!wasAdded && moduleHead.selfName != moduleName){
+			moduleHead = (moduleHead.nextModule = new FuncModule(moduleName));
+			wasAdded = true;
+		}
+		if(isIndexed && wasAdded)
+			this.saveModule(moduleHead);
+		return moduleHead;
+	}
     /**
      * 
      * @param {string} moduleName 
@@ -617,8 +635,8 @@ class CompletionItemProvider {
 			return null;
 
 		moduleHead.arrFunc.forEach( (funcNode) => {
-			if(funcNode.funcName.includes(funcName) ) { //skip module name
-				let item = new vscode.CompletionItem(funcNode.funcName, vscode.CompletionItemKind.Function);
+			if(funcNode.nodeName.includes(funcName) ) { //skip module name
+				let item = new vscode.CompletionItem(funcNode.nodeName, vscode.CompletionItemKind.Function);
 				item.documentation = funcNode.funcInfo.getCompletion();
 				arrItems.push(item);
 			}
@@ -666,13 +684,104 @@ class CompletionItemProvider {
 			return arrItems;
     }
 }
+class HashNodeType {
+	static Function = Symbol('Function');
+	static Field = Symbol('Field');
+}
+class HashModuleType {
+	static Class = Symbol('Class');
+	static Struct = Symbol('Struct');
+	static convertToNode = (/**@type {HashModuleType}*/type) => {
+		switch(type){
+			case this.Class:
+				return HashNodeType.Function;
+			case this.Struct:
+				return HashNodeType.Field;
+		}
+	}
+}
+class DocsBlockType {
+	static Functional = Symbol('Functional');
+	static Struct = Symbol('Struct');
+	static convertToModule = (/**@type {DocsBlockType}*/type) => {
+		switch(type){
+			case this.Functional:
+				return HashModuleType.Class;
+			case this.Struct:
+				return HashModuleType.Struct;
+		}
+	}
+}
+class DocsInfo {
+	type = new DocsBlockType();
+	data = [];
+	/**
+	 * @param {DocsBlockType} type
+	 * @param {any[]} data
+	 */
+	constructor(type, data){
+		this.type = type;
+		this.data = data;
+	}
+}
+class DocsStructInfo extends DocsInfo {
+	constructor(/**@type {string[]} */arrString){
+		super(DocsBlockType.Struct, arrString); //first element of arrString is Struct Label selfly
+	}
+}
+class DocsBlock {
+	type = new DocsBlockType();
+	block;
+	nextLine;
+	auxInfo = null;
+	constructor(/**@type {string} */block, /**@type {number} */nextLine){
+		this.nextLine = nextLine;
+		this.block = block;
+		this.type = DocsBlockType.Functional;
+	}
+	static valueOf = (/** @type {number} */ nextLine, /** @type {DocsInfo} */ auxInfo) => {
+		let object = new DocsBlock('', nextLine);
+		object.type = auxInfo.type;
+		object.auxInfo = auxInfo.data;
+		return object;
+	}
+}
 const STR_DOCS_START = ';Input:';
-const getDocsBlock = (fHandle, nLine, limitLine) => {
+const STR_DECLARE_START = ';@Declare';
+const hasExtSyntax = (strLine) => {
+	return strLine.includes(STR_DECLARE_START);
+}
+const getExtBlock = (/** @type {vscode.TextDocument} */ fHandle, /** @type {number} */ nLine, /** @type {number} */ limitLine) => {
+	let result = null;
+	let tempArray = [];
+	let buffString = fHandle.lineAt(nLine + 1).text;
+	let nextClosed = true;
+	let auxBuffer = [''];
+	nLine += 2;
+	if(!buffString.includes('struct'))
+		return result;
+	auxBuffer = buffString.match(/[a-zA-Z]+/g);
+	if(auxBuffer.length == 1)
+		return result;
+	tempArray.push(auxBuffer[1].trim());
+	while(nLine < limitLine && nextClosed){
+		buffString = fHandle.lineAt(nLine++).text;
+		auxBuffer = buffString.match('\.[a-zA-Z]+ ');
+		if(auxBuffer != null)
+			tempArray.push(auxBuffer[0].trim());
+		nextClosed = buffString.match('[ ]*\}') == null;
+	}
+	if(tempArray.length > 0)
+		result = DocsBlock.valueOf(nLine, new DocsStructInfo(tempArray));
+	return result;
+}
+const getDocsBlock = (/** @type {vscode.TextDocument} */ fHandle, /** @type {number} */ nLine, /** @type {number} */ limitLine) => {
 	let startLine = nLine;
-	let buffString = fHandle.lineAt(nLine++).text;
+	let buffString = fHandle.lineAt(nLine).text;
 	if(buffString.indexOf(STR_DOCS_START) != 0)
-		return null;
-
+		return hasExtSyntax(buffString) ? getExtBlock(
+					fHandle, nLine, limitLine) : null;
+	nLine += 1;
 	while( (nLine < limitLine) && fHandle.lineAt(nLine).text.indexOf(';') != -1)
 		nLine++;
 	buffString = fHandle.getText(
@@ -681,10 +790,7 @@ const getDocsBlock = (fHandle, nLine, limitLine) => {
 			new vscode.Position(nLine - 1, 1) 
 		)
 	)
-	return {
-		block: buffString,
-		nextLine: nLine
-	}		
+	return new DocsBlock(buffString, nLine);
 }
 const excludeKeyword = 'proc';
 const getFirstName = (fHandle, nLine) => {
@@ -713,22 +819,50 @@ const addToIndex = (/** @type {vscode.TextDocument} */ fHandle) => {
 		if(buffDocs == null || lineCnt < buffDocs.nextLine)
 			break;
 		currLine = buffDocs.nextLine;
-		let funcName = getFirstName(fHandle, currLine++);
-		if(funcName.charAt(0) != '.'){ //if not internal label
-			let funcNode = new FuncHashNode(funcName, 
-											new Functional(buffDocs.block));
-			funcNode.setSourceId(getLastSourceIndex());
-			hashTable.add(funcNode);
+		if(buffDocs.type == DocsBlockType.Functional){
+			let funcName = getFirstName(fHandle, currLine++);
+			if(funcName.charAt(0) != '.'){ //if not internal label
+				let funcNode = new FuncHashNode(funcName, 
+												new Functional(buffDocs.block));
+				funcNode.setSourceId(getLastSourceIndex());
+				hashTable.add(funcNode);
+			}
 		}
+		else {
+			let moduleName = buffDocs.auxInfo[0];
+			let moduleType = DocsBlockType.convertToModule(buffDocs.type)
+			hashTable.addAll(
+				HashNode.arrayOf(moduleName, 
+								buffDocs.auxInfo.slice(1, buffDocs.auxInfo.length),
+								moduleType
+								)
+			)
+		}
+			
+		
+			
+
 	}
 
 
 }
-
+class Message {
+	static CompileError = Symbol('CompileError');
+	static IndexError = Symbol('IndexError');
+}
+class MessageSender {
+	static errorMessage = '';
+	static send = (/** @type {string} */strMessage) => {
+		vscode.window.showInformationMessage(strMessage);
+	}
+}
 class IndexMemory {
 	arrExtType = ["asm", "inc", "fasm"];	
 	maxFileCnt = INDEX_FILE_CNT;
-	ignoreFiles = [''];
+	/**
+	 * @type {string[]}
+	 */
+	ignoreFiles = [];
 	errorHandle = null;
 	indexHandle = null; //function that invoked by index construction (vscode.TextDocument)
 	addSourceExtension = (/** @type {string} */ strExtType) => {
@@ -767,15 +901,11 @@ class IndexMemory {
 		let filePromise = vscode.workspace.findFiles(IndexMemory.getIgnoreSourceName(), undefined, 1);
 		let promiseResult = new Promise((resolve, reject) => {
 			filePromise.then( (arrFiles) => {
-				if(arrFiles.length == 0)
-					reject();
-				else {
 					let fHandle = vscode.workspace.openTextDocument(arrFiles[0]);
 					fHandle.then( (document) => {
 						this.ignoreFiles = this.extractFileNames(document);
 						resolve();
 					}, reject)
-				}
 			});		
 		})
 		return promiseResult;
@@ -787,7 +917,7 @@ class IndexMemory {
 		let lineCnt = fHandle.lineCount;
 		let iLine = 0;
 		let buffString = '';
-		let arrResult = [''];
+		let arrResult = [];
 		while(iLine < lineCnt) {
 			buffString = fHandle.lineAt(iLine).text;
 			buffString.trim();
@@ -813,24 +943,11 @@ class IndexMemory {
 		return IndexMemory.IGNORE_FILE_NAME;
 	}
 }
-var indexMemory = new IndexMemory();
-/**
- * @param {string} strMessage
- */
-function printErrorMessage(strMessage) {
-	vscode.window.showInformationMessage(strMessage);
-}
+const indexMemory = new IndexMemory();
 const initIndex = () => {
 	hashTable.clear(); //todo: replace with adaptive changing
-	indexMemory.errorHandle = () => {
-		printErrorMessage('Error during index construction')
-	}
-	indexMemory.indexHandle = (/** @type {vscode.TextDocument}*/ document) => {
-		saveSourceFile(document.fileName);
-		addToIndex(document);
-	}
 	indexMemory.setIgnoreFiles().then(indexMemory.init, indexMemory.errorHandle);
-
+	MessageSender.send("Indexation completed")
 };
 const compileProject = () => {
 	if(osMode == OperationSystem.Unknown){
@@ -862,6 +979,13 @@ const initGlobals = () => {
 	vscode.workspace.getConfiguration(CONFIG_HEADER).get("extensions").forEach( (/** @type {string} */ extValue) => {
 		indexMemory.addSourceExtension(extValue);
 	});
+	indexMemory.errorHandle = () => {
+		MessageSender.send('Error during index construction');
+	}
+	indexMemory.indexHandle = (/** @type {vscode.TextDocument}*/ document) => {
+		saveSourceFile(document.fileName);
+		addToIndex(document);
+	}
 	switch(system.type()){
 		case "Windows_NT":
 			osMode = OperationSystem.Win;
@@ -888,6 +1012,7 @@ function activate(context) {
         vscode.languages.registerCompletionItemProvider(
             LANG_NAME, new CompletionItemProvider(), '.'));
 	vscode.languages.registerHoverProvider(LANG_NAME, new HoverProvider());
+	initIndex();
 }
 
 

@@ -33,7 +33,7 @@ ret
 ;Notes:
 ;ds not corrupted
 ;
-Statements.hasWildCards:
+proc Statements.hasWildCards:
 push si
         mov si, ax
         mov dl, '?'
@@ -64,3 +64,4 @@ push si
 
 pop si
 ret
+endp
