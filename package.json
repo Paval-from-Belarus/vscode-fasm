@@ -2,7 +2,7 @@
 	"name": "fasm-assembly",
 	"displayName": "fasm for vscode",
 	"description": "Fasm x86_64 assembly syntax highlighting and etc",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"preview": true,
 	"publisher": "Paval-from-Belarus",
 	"engines": {
@@ -43,7 +43,7 @@
 				"title": "Flat assembly: Run script"
 			}
 		],
-		"keybindings":[
+		"keybindings": [
 			{
 				"command": "fasm.compile",
 				"key": "ctrl+f9"
