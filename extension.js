@@ -451,7 +451,7 @@ class HashIndex {
      */
     constructor(init_capacity){
         this.table = new Array(init_capacity)
-        this.moduleIndex = new Array(init_capacity);
+        this.moduleIndex = [];
     }
     table;
     moduleIndex;
@@ -553,7 +553,7 @@ class HashIndex {
 	clear = () => {
 		let oldCapacity = this.table.length;
 		this.table = new Array(oldCapacity);
-		this.moduleIndex = new Array(oldCapacity);
+		this.moduleIndex = [];
 	}
 }
 
@@ -710,23 +710,22 @@ class CompletionItemProvider {
 			let moduleName;
 			let funcName;
 			let arrItems = new Array();
-
+			let tempItems;
 			UserInput.extract(document, position);
 			moduleName = UserInput.extractModule();
 			funcName = UserInput.extractMethod();
 			if(moduleName == null){
-				let moduleItems = this.getItems(funcName, undefined);
-				if(moduleItems != null){
-					moduleItems.forEach((moduleItem) => {
+				tempItems = this.getItems(funcName, undefined);
+				if(tempItems != null){
+					tempItems.forEach((moduleItem) => {
 						arrItems.push(moduleItem)
 					})
 				}
 				moduleName = DUMYY_MODULE_NAME;
 			}
-			this.getItems(moduleName, funcName).forEach((funcItem) => {
-				arrItems.push(funcItem)
-			})
-			
+			tempItems = this.getItems(moduleName, funcName);
+			if(tempItems != null)
+				tempItems.forEach( item => arrItems.push(item));
 			return arrItems;
     }
 }

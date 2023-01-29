@@ -76,7 +76,7 @@
 						},
 						{
 							"match":".",
-							"name": "markup.other.declaration.type"
+							"name": "markup.other.declarations"
 						}
 					]
 				},
@@ -330,7 +330,7 @@
 					"comment": "Simbols"
 				},
 				{
-					"match": "macro|repeat|if|end if|end repeat|include|format|org|entry|struct|@@|@B|@F|\\(|\\)|\\?",
+					"match": "(macro|repeat|if|end if|end repeat|include|format|org|entry|struc|@@|@B|@F|\\(|\\)|\\?)[ \n]",
 					"name": "keyword.control.compiller"
 				},
 				{

@@ -1,6 +1,6 @@
 import 'some_macro'
 ;@Declare {struct}
-struct DirFileRec
+struc DirFileRec
 {
   .sFileName String[11]
   .bFileAttr db
@@ -11,6 +11,7 @@ SYSTEM_BUFFER_BUSY equ 0xC
 SYSTEM_BUFFER_PAGE_SIZE equ 100
 sizeof.SystemBufferHandle equ 2
 SYSTEM_BUFFER_PAGE_NUM  equ (sizeof.SystemBuffer / (sizeof.SystemBufferHandle + SYSTEM_BUFFER_PAGE_SIZE) )
+
 ;Input: None
 ;Output: None
 ;Notes: Init system buffer
@@ -28,6 +29,7 @@ push es di
      stosw
      add di, SYSTEM_BUFFER_PAGE_SIZE
      loop .touchLoop
+     
 pop di es
 ret
 

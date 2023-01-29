@@ -667,7 +667,7 @@
 			}
 		},
 		{
-			"scope": "markup.other.declaration.type",
+			"scope": "markup.other.declarations",
 			"settings": {
 				"foreground": "#f9570c",
 				"fontStyle": "italic"
