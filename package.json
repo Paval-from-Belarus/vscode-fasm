@@ -2,7 +2,7 @@
 	"name": "fasm-assembly",
 	"displayName": "fasm for vscode",
 	"description": "Fasm x86_64 assembly syntax highlighting and etc",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"preview": true,
 	"publisher": "Paval-from-Belarus",
 	"engines": {
