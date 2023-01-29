@@ -43,6 +43,12 @@
 				"title": "Flat assembly: Run script"
 			}
 		],
+		"keybindings":[
+			{
+				"command": "fasm.compile",
+				"key": "ctrl+f9"
+			}
+		],
 		"configuration": {
 			"title": "Flat assembly",
 			"properties": {

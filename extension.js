@@ -1001,27 +1001,64 @@ const initIndex = () => {
 	indexMemory.setIgnoreFiles().then(indexMemory.init, indexMemory.errorHandle);
 	MessageSender.send("Indexation completed")
 };
-const compileProject = () => {
+
+const findCompilationCause = (fileName) => {
+	vscode.workspace.findFiles(fileName, null, 1).then((arrFilesUri) => {
+		if(arrFilesUri.length == 0)
+			return;
+		vscode.workspace.openTextDocument(arrFilesUri[0]).then( document => {
+			let lineCnt = document.lineCount;
+			let iLine = 0;
+			let buffString = '';
+			let resultLine = -1;
+			let arrString = [];
+			while(iLine < lineCnt){
+				buffString = document.lineAt(iLine).text;
+				arrString = buffString.match("\\[[0-9]+\\]");
+				if(arrString != null)
+					break;
+				iLine += 1;
+			}
+			if(iLine != lineCnt){
+				vscode.window.showErrorMessage("Hello World");
+			}
+			
+		});
+	});
+}
+const getCompilerFileInfo = () => "Dummy@@File.dummy";
+const compileProject = (/** @type {vscode.TextEditor} */ editor, /** @type {any} */ edit, /** @type {any} */ args) => {
 	if(osMode == OperationSystem.Unknown){
-		vscode.window.showErrorMessage("Unknown operation system");
+		MessageSender.send("Unknown operation system");
 		return;
 	}
 	let strCommand;
 	let terminal;
+	let sourceFile = editor.document.fileName;
+	let fileInfo = getCompilerFileInfo();
 	if(vscode.window.terminals.length == 0)
 		terminal = vscode.window.createTerminal(`fasm terminal`);
 	else
 		terminal = vscode.window.terminals.at(0);
 	switch(osMode){
 		case OperationSystem.Win:
-			strCommand = `start ${CompillerPath}`;
+			strCommand = `${CompillerPath} ${sourceFile}`;
 			break;
 		case OperationSystem.Linux:
-			strCommand = `${CompillerPath}`
+			strCommand = `${CompillerPath} ${sourceFile}`
 			break;
 	}
 	terminal.sendText(strCommand);
+	// let error = new vscode.Diagnostic(
+	// 	new vscode.Range(
+	// 		new vscode.Position(1, 0),
+	// 		new vscode.Position(1, 10)
+	// 	), "Error"
+	// );
 	
+	// let action = new vscode.CodeAction("Error action");
+	
+	// terminal.sendText(`rm ${fileInfo}`);
 }
 var osMode = OperationSystem.Unknown;
 const initGlobals = () => {
@@ -1057,7 +1094,7 @@ function activate(context) {
 	initGlobals();
 	let disposable = vscode.commands.registerCommand('fasm.initIndex', initIndex);	
 	context.subscriptions.push(disposable);
-	disposable = vscode.commands.registerCommand('fasm.compile',compileProject);
+	disposable = vscode.commands.registerTextEditorCommand('fasm.compile', compileProject);
 	context.subscriptions.push(disposable);
 
     context.subscriptions.push(
