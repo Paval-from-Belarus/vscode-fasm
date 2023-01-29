@@ -1,5 +1,11 @@
 import 'some_macro'
-S
+;@Declare {struct}
+struct DirFileRec
+{
+  .sFileName String[11]
+  .bFileAttr db
+}
+
 SYSTEM_BUFFER_FREE equ 0x3
 SYSTEM_BUFFER_BUSY equ 0xC
 SYSTEM_BUFFER_PAGE_SIZE equ 100
