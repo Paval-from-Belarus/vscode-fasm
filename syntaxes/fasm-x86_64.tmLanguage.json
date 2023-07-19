@@ -61,7 +61,7 @@
 					]
 				},
 				{
-					"begin":";@Declare(\\w*)",
+					"begin":";@(Declare|Description)(\\w*)",
 					"end": "\\}",
 					"beginCaptures": [{
 						"name": "markup.other.docs"
@@ -287,7 +287,7 @@
 			}]
 		},
 		"numbers":
-		{
+		{	
 			"patterns":[
 				{
 					"patterns":[
@@ -307,18 +307,21 @@
 					]
 				},
 				{
-					"match": "[0-1]([_0-1]*[0-1])*+(b|B)",
-					"name": "constant.numeric.octal"
-				},
-				{
-					"match": "[0-7]([_0-7]*[0-7])*+(o|O)",
-					"name": "constant.numeric.octal"
-				},
-				{
-					"match": "[0-9]([_0-9]*[0-9])*",
-					"name": "constant.numeric.decimal"
+					"patterns":[
+						{
+							"match": "(?<=\\s?)[0-1]([_0-1]*[0-1])*+(b|B)(?=\\W)",
+							"name": "constant.numeric.octal"
+						},
+						{
+							"match": "(?<=\\s?)[0-7]([_0-7]*[0-7])*+(o|O)(?=\\W)",
+							"name": "constant.numeric.octal"
+						},
+						{
+							"match": "(?<=\\s?)[0-9]([_0-9]*[0-9])*(?=\\W)",
+							"name": "constant.numeric.decimal"
+						} 
+					]
 				}
-	
 			]
 		},
 		"keywords":
@@ -326,15 +329,15 @@
 			"patterns":[
 				{
 					"name": "keyword.control",
-					"match": "(\\[|\\]|,|:|\\+|-|\\*|/)|\\.|=|<>",
+					"match": "(\\[|\\]|,|:|\\+|-|\\*|/)|\\.|=|<>|<|>|%",
 					"comment": "Simbols"
 				},
 				{
-					"match": "(macro|repeat|if|end if|end repeat|include|format|org|entry|struc|@@|@B|@F|\\(|\\)|\\?)[ \n]",
+					"match": "(macro|repeat|if|end if|end repeat|include|format|org|entry|struc|@@:|@B|@F|\\(|\\)|\\?)[ \n]",
 					"name": "keyword.control.compiller"
 				},
 				{
-					"match": "rept|repv|reps|define|equ|fix|match|local|{|}|\\\\|([a-zA-Z]+(\\&|\\*))",
+					"match": "\\$|\\#|rept|repv|reps|define|equ|fix|match|local|{|}|\\\\|([a-zA-Z]+(\\&|\\*))",
 					"name": "keyword.control.preproc"
 					
 				},
@@ -357,11 +360,11 @@
 			"patterns":[
 				{
 					"name": "variable.other.hungarian",
-					"match": "(b|w|d|q|p|lp|s|sz|arr|bmp|bm)[A-Z][a-zA-Z0-9]*",
+					"match": "(b|w|d|q|p|lp|s|sz|arr|bmp|bm)[A-Z]\\w*",
 					"comment": "variable in hungrian-system style"
 				},
 				{
-					"match": "[_@a-zA-Z][_@a-zA-Z0-9]*",
+					"match": "[^\\s]+",
 					"name": "entity.other.text.default"
 				}
 			]
