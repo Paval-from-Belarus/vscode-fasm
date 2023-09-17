@@ -2,7 +2,7 @@
 	"name": "fasm-assembly",
 	"displayName": "fasm for vscode",
 	"description": "Fasm x86_64 assembly syntax highlighting and etc",
-	"version": "0.0.4",
+	"version": "0.0.6",
 	"preview": true,
 	"publisher": "Paval-from-Belarus",
 	"engines": {
@@ -12,7 +12,7 @@
 		"type": "git",
 		"url": "https://github.com/Paval-from-Belarus/vscode-fasm.git"
 	},
-	"license": "MIT License",
+	"license": "GNU General Public License v3.0",
 	"categories": [
 		"Programming Languages"
 	],

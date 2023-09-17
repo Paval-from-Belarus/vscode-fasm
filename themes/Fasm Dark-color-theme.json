@@ -654,6 +654,13 @@
 			}
 		},
 		{
+			"scope":"entity.name.section",
+			"settings": {
+				"foreground": "#e39837",
+				"fontStyle": "bold",
+			}
+		},
+		{
 			"scope": "entity.other.text",
 			"settings": {
 				"foreground": "#FF891A"

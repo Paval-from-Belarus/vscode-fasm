@@ -124,12 +124,12 @@
 		{
 			"patterns": [
 			{
-				"match": "(')(.*)(')",
+				"match": "'[^']*'",
 				"name": "string.quoted.double.c",
 				"comment": "Quoted single"
 			},
 			{
-				"match": "(\")(.*)(\")",
+				"match": "\"[^\"]*\"",
 				"name": "string.quoted.double.c",
 				"comment": "Quoted double"
 			}]
@@ -329,15 +329,15 @@
 			"patterns":[
 				{
 					"name": "keyword.control",
-					"match": "(\\[|\\]|,|:|\\+|-|\\*|/)|\\.|=|<>|<|>|%",
+					"match": "(\\[|\\]|,|:|\\+|-|\\*|/)|\\.|=|<>|<|>|%|mod|eqType",
 					"comment": "Simbols"
 				},
 				{
-					"match": "(macro|repeat|if|end if|end repeat|include|format|org|entry|struc|@@:|@B|@F|\\(|\\)|\\?)[ \n]",
+					"match": "(macro|repeat|if|end if|end repeat|include|format|org|entry|struc|import|public|extrn|@@:|@B|@F|[\\)\\(?])[ \n]",
 					"name": "keyword.control.compiller"
 				},
 				{
-					"match": "\\$|\\#|rept|repv|reps|define|equ|fix|match|local|{|}|\\\\|([a-zA-Z]+(\\&|\\*))",
+					"match": "\\$|\\#|rept|repv|reps|define|equ|fix|match|local|irps|irpv|irp|{|}|\\\\|([a-zA-Z]+(\\&|\\*)|`\\w+)",
 					"name": "keyword.control.preproc"
 					
 				},
@@ -360,7 +360,7 @@
 			"patterns":[
 				{
 					"name": "variable.other.hungarian",
-					"match": "(b|w|d|q|p|lp|s|sz|arr|bmp|bm)[A-Z]\\w*",
+					"match": "(b|w|d|q|p|lp|s|sz|arr|bmp|bm|h)[A-Z]\\w*",
 					"comment": "variable in hungrian-system style"
 				},
 				{

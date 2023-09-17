@@ -1,17 +1,19 @@
 import 'some_macro'
-;@Declare {struct}
+;@Declare {struct=DirFileRec}
 struc DirFileRec
 {
   .sFileName String[11]
   .bFileAttr db
 }
-
+;@Declare{enum=PageDirEntry}
+;@Description{Kernel representation of page memory region. Each PageInfoRec specify the 4KiB Memory region}
+PageDirEntry.HugeSize equ 10_000_000b ;for 4MiB pages
+PageDirEntry.Accessed equ 100_000b
 SYSTEM_BUFFER_FREE equ 0x3
 SYSTEM_BUFFER_BUSY equ 0xC
 SYSTEM_BUFFER_PAGE_SIZE equ 100
 sizeof.SystemBufferHandle equ 2
 SYSTEM_BUFFER_PAGE_NUM  equ (sizeof.SystemBuffer / (sizeof.SystemBufferHandle + SYSTEM_BUFFER_PAGE_SIZE) )
-
 ;Input: None
 ;Output: None
 ;Notes: Init system buffer

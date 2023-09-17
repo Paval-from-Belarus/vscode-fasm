@@ -554,8 +554,9 @@ class HashIndex {
     }
 }
 
-
+/**@type {string} */
 var CompillerPath;
+/**@type {string} */
 var WorkDirectoryPath;
 
 const SEARCH_EXT = ['.fasm', '.asm', '.inc'];
@@ -850,14 +851,10 @@ class CompletionItemProvider {
      */
     getItems = (moduleName, funcName) => {
         let arrItems;
-        if (funcName != undefined && funcName != '') {
+        if (funcName != undefined) {
             arrItems = this.getFuncItems(moduleName, funcName); 
         } else {
-            if (funcName != '') {
-                arrItems = this.getModuleItems(moduleName);
-            } else {
-                arrItems = [];
-            }
+            arrItems = this.getModuleItems(moduleName);
         }
         return arrItems;
     }
@@ -1050,7 +1047,7 @@ const getExtBlock = (/** @type {vscode.TextDocument} */ fHandle, /** @type {numb
     switch (syntaxGroup.type) {
         case "Struct":
             let fields = [];
-            pattern = / *\.([^ ]+) *.*\n?$/
+            pattern = /\.([^ \n]+)/
             while (nLine < fHandle.lineCount && !(nextLine = fHandle.lineAt(nLine).text).match(/ *\} *(;.*\n?)?/)) {
                 let dummyField = nextLine.match(pattern);
                 if (dummyField != null && dummyField.length == 2) {
@@ -1062,7 +1059,7 @@ const getExtBlock = (/** @type {vscode.TextDocument} */ fHandle, /** @type {numb
             break;
         case "Enum":
             let values = [];
-            pattern = /.+\.([^ ]+) *.*\n?$/;
+            pattern = /^[^\.]+\.([^ \n]+)/;
             while (nLine < fHandle.lineCount && (nextLine = fHandle.lineAt(nLine).text).includes(syntaxGroup.name)) {
                 let dummyValues = nextLine.match(pattern);
                 if (dummyValues != null && dummyValues.length == 2) {
@@ -1372,8 +1369,15 @@ const compileProject = (/** @type {vscode.TextEditor} */ editor, /** @type {any}
 }
 var osMode = OperationSystem.Unknown;
 const initGlobals = () => {
-    WorkDirectoryPath = vscode.workspace.workspaceFolders[0].uri.path;
     CompillerPath = vscode.workspace.getConfiguration(CONFIG_HEADER).get('compiler');
+    let workingFolders = vscode.workspace.workspaceFolders;
+    if (workingFolders != null) {
+        WorkDirectoryPath = vscode.workspace.workspaceFolders[0].uri.path;
+    } else {
+        let regExpr = new RegExp(/(.+)(\\|\/).+$/);
+        let matchers = CompillerPath.match(regExpr);
+        WorkDirectoryPath = matchers[1];
+    }
     vscode.workspace.getConfiguration(CONFIG_HEADER).get("extensions").forEach((/** @type {string} */ extValue) => {
         indexMemory.addSourceExtension(extValue);
     });
